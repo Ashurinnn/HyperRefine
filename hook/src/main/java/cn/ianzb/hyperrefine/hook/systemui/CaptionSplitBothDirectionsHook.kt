@@ -4,6 +4,7 @@ import android.graphics.Point
 import android.view.View
 import android.view.ViewGroup
 import cn.ianzb.hyperrefine.hook.base.BaseHook
+import cn.ianzb.hyperrefine.hook.device.DeviceType
 import cn.ianzb.hyperrefine.hook.rule.HookSkippedException
 import cn.ianzb.hyperrefine.hook.xposed.HookHelper
 import cn.ianzb.hyperrefine.hook.xposed.HookParam
@@ -34,6 +35,9 @@ import java.lang.reflect.Method
 class CaptionSplitBothDirectionsHook : BaseHook() {
 
     override val key: String = SplitScreenKeys.CAPTION_BOTH_DIRECTIONS
+
+    /** 平板 / 折叠屏专属：手机（直板）保持官方行为。 */
+    override val deviceScope: Set<DeviceType> = setOf(DeviceType.PAD, DeviceType.FOLD)
 
     private var loader: ClassLoader? = null
 

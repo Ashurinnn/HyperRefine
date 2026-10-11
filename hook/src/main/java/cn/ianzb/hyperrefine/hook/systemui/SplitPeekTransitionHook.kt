@@ -2,6 +2,7 @@ package cn.ianzb.hyperrefine.hook.systemui
 
 import android.graphics.Rect
 import cn.ianzb.hyperrefine.hook.base.BaseHook
+import cn.ianzb.hyperrefine.hook.device.DeviceType
 import cn.ianzb.hyperrefine.hook.rule.HookSkippedException
 import cn.ianzb.hyperrefine.hook.xposed.HookHelper
 import cn.ianzb.hyperrefine.hook.xposed.HookParam
@@ -32,6 +33,9 @@ import cn.ianzb.hyperrefine.hook.xposed.Reflect
 class SplitPeekTransitionHook : BaseHook() {
 
     override val key: String = SplitScreenKeys.SPLIT_PEEK_TRANSITION
+
+    /** 平板 / 折叠屏专属：手机（直板）保持官方行为。 */
+    override val deviceScope: Set<DeviceType> = setOf(DeviceType.PAD, DeviceType.FOLD)
 
     private var loader: ClassLoader? = null
 

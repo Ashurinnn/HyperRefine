@@ -1,6 +1,7 @@
 package cn.ianzb.hyperrefine.hook.systemui
 
 import cn.ianzb.hyperrefine.hook.base.BaseHook
+import cn.ianzb.hyperrefine.hook.device.DeviceType
 import cn.ianzb.hyperrefine.hook.rule.HookSkippedException
 import cn.ianzb.hyperrefine.hook.xposed.HookHelper
 import cn.ianzb.hyperrefine.hook.xposed.Reflect
@@ -16,6 +17,9 @@ import cn.ianzb.hyperrefine.hook.xposed.Reflect
 class SplitDirectionCompatHook : BaseHook() {
 
     override val key: String = KEY
+
+    /** 平板 / 折叠屏专属：仅服务方向解锁 / 把手菜单双向分屏，手机不安装。 */
+    override val deviceScope: Set<DeviceType> = setOf(DeviceType.PAD, DeviceType.FOLD)
 
     override fun init() {
         val loader = target.classLoader ?: throw HookSkippedException("no classloader")

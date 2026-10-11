@@ -551,7 +551,7 @@ internal fun featureSpecs(): List<OptionSpec> {
             summaryRes = R.string.sosc_unlock_split_direction_summary,
             defaultBoolean = false,
             targetPackages = systemUi,
-            deviceScope = setOf(DeviceType.PAD),
+            deviceScope = setOf(DeviceType.PAD, DeviceType.FOLD),
             showStatus = true,
         ),
         OptionSpec(
@@ -561,6 +561,7 @@ internal fun featureSpecs(): List<OptionSpec> {
             summaryRes = R.string.multiple_split_stages_custom_summary,
             defaultBoolean = false,
             targetPackages = systemUi,
+            deviceScope = setOf(DeviceType.PAD, DeviceType.FOLD),
             showStatus = true,
         ),
         OptionSpec(
@@ -574,6 +575,7 @@ internal fun featureSpecs(): List<OptionSpec> {
             sliderStep = 1f,
             sliderDecimals = 0,
             targetPackages = systemUi,
+            deviceScope = setOf(DeviceType.PAD, DeviceType.FOLD),
             dependsOn = SplitScreenKeys.MULTIPLE_SPLIT_CUSTOM,
         ),
         OptionSpec(
@@ -583,7 +585,7 @@ internal fun featureSpecs(): List<OptionSpec> {
             summaryRes = R.string.multiple_split_free_ratio_summary,
             defaultBoolean = false,
             targetPackages = systemUi,
-            deviceScope = setOf(DeviceType.PAD),
+            deviceScope = setOf(DeviceType.PAD, DeviceType.FOLD),
             showStatus = true,
         ),
         OptionSpec(
@@ -593,7 +595,7 @@ internal fun featureSpecs(): List<OptionSpec> {
             summaryRes = R.string.sosc_single_split_free_ratio_summary,
             defaultBoolean = false,
             targetPackages = systemUi,
-            deviceScope = setOf(DeviceType.PAD),
+            deviceScope = setOf(DeviceType.PAD, DeviceType.FOLD),
             showStatus = true,
         ),
         OptionSpec(
@@ -603,7 +605,6 @@ internal fun featureSpecs(): List<OptionSpec> {
             summaryRes = R.string.sosc_split_free_ratio_global_summary,
             defaultBoolean = false,
             targetPackages = systemUi,
-            deviceScope = setOf(DeviceType.PAD),
             showStatus = true,
         ),
         OptionSpec(
@@ -613,7 +614,7 @@ internal fun featureSpecs(): List<OptionSpec> {
             summaryRes = R.string.sosc_split_ratio_memory_summary,
             defaultBoolean = false,
             targetPackages = systemUi,
-            deviceScope = setOf(DeviceType.PAD),
+            deviceScope = setOf(DeviceType.PAD, DeviceType.FOLD),
             showStatus = true,
         ),
         OptionSpec(
@@ -623,7 +624,7 @@ internal fun featureSpecs(): List<OptionSpec> {
             summaryRes = R.string.sosc_split_peek_transition_summary,
             defaultBoolean = false,
             targetPackages = systemUi,
-            deviceScope = setOf(DeviceType.PAD),
+            deviceScope = setOf(DeviceType.PAD, DeviceType.FOLD),
             showStatus = true,
         ),
         OptionSpec(
@@ -633,7 +634,7 @@ internal fun featureSpecs(): List<OptionSpec> {
             summaryRes = R.string.mulwin_caption_both_directions_summary,
             defaultBoolean = false,
             targetPackages = systemUi,
-            deviceScope = setOf(DeviceType.PAD),
+            deviceScope = setOf(DeviceType.PAD, DeviceType.FOLD),
             dependsOn = SplitScreenKeys.UNLOCK_DIRECTION,
             showStatus = true,
         ),

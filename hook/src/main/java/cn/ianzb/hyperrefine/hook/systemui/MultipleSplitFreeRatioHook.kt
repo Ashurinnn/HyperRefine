@@ -1,6 +1,7 @@
 package cn.ianzb.hyperrefine.hook.systemui
 
 import cn.ianzb.hyperrefine.hook.base.BaseHook
+import cn.ianzb.hyperrefine.hook.device.DeviceType
 import cn.ianzb.hyperrefine.hook.rule.HookSkippedException
 import cn.ianzb.hyperrefine.hook.xposed.HookHelper
 import cn.ianzb.hyperrefine.hook.xposed.Reflect
@@ -26,6 +27,9 @@ import cn.ianzb.hyperrefine.hook.xposed.Reflect
 class MultipleSplitFreeRatioHook : BaseHook() {
 
     override val key: String = SplitScreenKeys.MULTIPLE_SPLIT_FREE_RATIO
+
+    /** 平板 / 折叠屏专属：手机（直板）保持官方行为。 */
+    override val deviceScope: Set<DeviceType> = setOf(DeviceType.PAD, DeviceType.FOLD)
 
     private var loader: ClassLoader? = null
     private var magnetRadius: Int? = null
