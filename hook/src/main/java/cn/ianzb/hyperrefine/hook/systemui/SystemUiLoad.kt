@@ -55,6 +55,41 @@ class SystemUiLoad : BaseLoad() {
         initHook(VolumeBarSizeHook(), HookPrefs.getBoolean(VolumeBarKeys.BAR_SIZE, false))
         initHook(SideVolumePositionHook(), HookPrefs.getBoolean(VolumeBarKeys.SIDE_POS, false))
         initHook(SidePanelPositionHook(), HookPrefs.getBoolean(VolumeBarKeys.L2_POS, false))
+        initHook(
+            SplitDirectionUnlockHook(),
+            HookPrefs.getBoolean(SplitScreenKeys.UNLOCK_DIRECTION, false),
+        )
+        initHook(
+            MultipleSplitStagesHook(),
+            HookPrefs.getBoolean(SplitScreenKeys.MULTIPLE_SPLIT_CUSTOM, false),
+        )
+        initHook(
+            SingleSplitFreeRatioHook(),
+            HookPrefs.getBoolean(SplitScreenKeys.SINGLE_SPLIT_FREE_RATIO, false) ||
+                HookPrefs.getBoolean(SplitScreenKeys.SPLIT_FREE_RATIO_GLOBAL, false),
+        )
+        initHook(
+            SplitRatioMemoryHook(),
+            HookPrefs.getBoolean(SplitScreenKeys.SPLIT_RATIO_MEMORY, false),
+        )
+        initHook(
+            SplitPeekTransitionHook(),
+            HookPrefs.getBoolean(SplitScreenKeys.SPLIT_PEEK_TRANSITION, false),
+        )
+        initHook(
+            MultipleSplitFreeRatioHook(),
+            HookPrefs.getBoolean(SplitScreenKeys.MULTIPLE_SPLIT_FREE_RATIO, false),
+        )
+        initHook(
+            CaptionSplitBothDirectionsHook(),
+            HookPrefs.getBoolean(SplitScreenKeys.CAPTION_BOTH_DIRECTIONS, false),
+        )
+        // 方向判定兼容层：两个入口任一开启都需要（本身没有配置项）。
+        initHook(
+            SplitDirectionCompatHook(),
+            HookPrefs.getBoolean(SplitScreenKeys.UNLOCK_DIRECTION, false) ||
+                HookPrefs.getBoolean(SplitScreenKeys.CAPTION_BOTH_DIRECTIONS, false),
+        )
     }
 
     companion object {

@@ -82,7 +82,7 @@ abstract class BaseLoad {
             }
             val variant = hook.apply(target)
             HookHelper.log("${hook.tag} hook success${variant?.let { " [$it]" } ?: ""} @ ${target.packageName}")
-            HookStatusReporter.markInstalled(hook.key)
+            hook.keys.forEach { HookStatusReporter.markInstalled(it) }
         } catch (t: HookSkippedException) {
             // 版本 / 设备筛选未命中属于主动跳过。
             HookHelper.log("${hook.tag} skipped @ ${target.packageName}: ${t.message}")

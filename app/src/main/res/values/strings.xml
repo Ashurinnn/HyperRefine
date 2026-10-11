@@ -130,10 +130,32 @@
 
     <!-- Features -->
     <string name="feature_system_ui">系统界面</string>
-    <string name="feature_system_apps">系统应用</string>
     <string name="feature_control_center">控制中心</string>
     <string name="section_volume">音量</string>
     <string name="section_lock_aod">锁屏与息屏</string>
+    <string name="feature_app_beautify">应用美化</string>
+    <string name="feature_top_bar_blur">渐变模糊</string>
+    <string name="section_app_blur">模糊效果</string>
+    <string name="feature_window_manager">窗口管理</string>
+    <string name="section_split_window">分屏与窗口</string>
+    <string name="section_split_screen">分屏</string>
+    <string name="sosc_unlock_split_direction">解除分屏方向限制</string>
+    <string name="sosc_unlock_split_direction_summary">竖屏也可左右分屏、横屏也可上下分屏</string>
+    <string name="multiple_split_max_stages">多分屏数量上限</string>
+    <string name="multiple_split_free_ratio">多分屏无级调节宽度</string>
+    <string name="multiple_split_free_ratio_summary">多分屏拖拽分割线时可任意设置每个应用的宽度</string>
+    <string name="multiple_split_stages_custom">自定义多分屏数量</string>
+    <string name="multiple_split_stages_custom_summary">接管系统的多分屏数量上限</string>
+    <string name="sosc_single_split_free_ratio">解除单应用分屏比例限制</string>
+    <string name="sosc_single_split_free_ratio_summary">单应用分屏（另一半是桌面）时分割线不再被强制回 1:1</string>
+    <string name="sosc_split_free_ratio_global">分屏比例无级调节</string>
+    <string name="sosc_split_free_ratio_global_summary">分割线可在任意位置停留，不再吸附固定档位（全局）</string>
+    <string name="sosc_split_ratio_memory">切换方向保持比例</string>
+    <string name="sosc_split_ratio_memory_summary">左右与上下分屏互相切换时保持每个应用的占比</string>
+    <string name="sosc_split_peek_transition">1:9 拖拽过渡</string>
+    <string name="sosc_split_peek_transition_summary">拖向 1:9 时小窗平滑移出屏幕；点击离屏小窗会先把它移回屏幕内</string>
+    <string name="mulwin_caption_both_directions">把手菜单同时显示双向分屏</string>
+    <string name="mulwin_caption_both_directions_summary">「···」菜单同时显示左右与上下两对分屏按钮</string>
     <string name="feature_glass">柔光玻璃</string>
 
     <string name="section_security_center">安全服务</string>

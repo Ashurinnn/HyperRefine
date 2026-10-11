@@ -29,6 +29,14 @@ abstract class BaseHook {
     /** 绑定的配置键；用于 hook 状态上报与 UI 展示。 */
     open val key: String get() = javaClass.simpleName
 
+    /**
+     * 本条规则实际覆盖的配置键（用于 hook 状态上报）。
+     *
+     * 默认只有 [key]；多条开关共用一次挂载的规则按「本次挂载时开启的开关」覆写，
+     * 避免共键 hook 的卡片显示为「未生效」。
+     */
+    open val keys: List<String> get() = listOf(key)
+
     /** 是否需要 DexKit 会话。 */
     open fun useDexKit(): Boolean = false
 

@@ -63,6 +63,13 @@ class SystemUiActivity : BaseSubPageActivity() {
                 featureSpec(KEY_AOD),
             ),
         )
+        // 分屏 / 多分屏等窗口能力单独成页；改动需重启系统界面生效。
+        val windowSection = HookSection(
+            titleRes = R.string.section_split_window,
+            specs = listOf(
+                featureSpec(KEY_WINDOW_MANAGER),
+            ),
+        )
 
         val openSubPage: (String) -> Unit = { key ->
             when (key) {
@@ -86,6 +93,8 @@ class SystemUiActivity : BaseSubPageActivity() {
                     context.startActivity(Intent(context, VolumeBarLayoutActivity::class.java))
                 KEY_AOD ->
                     context.startActivity(Intent(context, AodActivity::class.java))
+                KEY_WINDOW_MANAGER ->
+                    context.startActivity(Intent(context, WindowManagerActivity::class.java))
             }
         }
 
@@ -104,7 +113,7 @@ class SystemUiActivity : BaseSubPageActivity() {
                 ),
             contentPadding = contentPadding,
         ) {
-            listOf(controlCenterSection, volumeSection, lockAodSection).forEach { section ->
+            listOf(controlCenterSection, volumeSection, lockAodSection, windowSection).forEach { section ->
                 item {
                     HookSectionCard(section) {
                         section.specs.forEach { spec ->

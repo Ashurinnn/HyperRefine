@@ -130,10 +130,32 @@
 
     <!-- Features -->
     <string name="feature_system_ui">System UI</string>
-    <string name="feature_system_apps">System apps</string>
     <string name="feature_control_center">Control center</string>
     <string name="section_volume">Volume</string>
     <string name="section_lock_aod">Lock screen &amp; AOD</string>
+    <string name="feature_app_beautify">App beautify</string>
+    <string name="feature_top_bar_blur">Gradient blur</string>
+    <string name="section_app_blur">Blur effects</string>
+    <string name="feature_window_manager">Window management</string>
+    <string name="section_split_window">Split &amp; windows</string>
+    <string name="section_split_screen">Split screen</string>
+    <string name="sosc_unlock_split_direction">Unlock split-screen orientation</string>
+    <string name="sosc_unlock_split_direction_summary">Allow side-by-side split in portrait and top/bottom split in landscape</string>
+    <string name="multiple_split_max_stages">Multi-split count limit</string>
+    <string name="multiple_split_free_ratio">Stepless width in multi-split</string>
+    <string name="multiple_split_free_ratio_summary">Drag multi-split dividers freely to set each app’s width</string>
+    <string name="multiple_split_stages_custom">Custom multi-split count</string>
+    <string name="multiple_split_stages_custom_summary">Override how many apps multi-split can hold</string>
+    <string name="sosc_single_split_free_ratio">Free ratio in single-app split</string>
+    <string name="sosc_single_split_free_ratio_summary">In single-app split (home on the other half) the divider is no longer forced back to 1:1</string>
+    <string name="sosc_split_free_ratio_global">Stepless split ratio</string>
+    <string name="sosc_split_free_ratio_global_summary">The divider can rest at any position instead of snapping to fixed ratios (global)</string>
+    <string name="sosc_split_ratio_memory">Keep ratio when switching direction</string>
+    <string name="sosc_split_ratio_memory_summary">Keep each app’s share when switching between left/right and top/bottom</string>
+    <string name="sosc_split_peek_transition">1:9 drag transition</string>
+    <string name="sosc_split_peek_transition_summary">Drag toward 1:9: the small window slides off smoothly; tapping it first brings it back on screen</string>
+    <string name="mulwin_caption_both_directions">Both split directions in the “···” menu</string>
+    <string name="mulwin_caption_both_directions_summary">Show left/right and top/bottom split buttons together in the “···” menu</string>
     <string name="feature_glass">Soft glass</string>
 
     <string name="section_security_center">Security</string>

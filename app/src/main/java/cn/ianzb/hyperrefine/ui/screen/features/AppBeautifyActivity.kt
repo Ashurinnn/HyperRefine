@@ -1,13 +1,14 @@
 package cn.ianzb.hyperrefine.ui.screen.features
 
+import android.content.Intent
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import cn.ianzb.hyperrefine.R
 import cn.ianzb.hyperrefine.hook.miuix.MiuixAppLoad
-import cn.ianzb.hyperrefine.hook.miuix.TopBarKeys
 import cn.ianzb.hyperrefine.ui.component.QuickActionsAction
 import cn.ianzb.hyperrefine.ui.component.pref.HookOptionView
 import cn.ianzb.hyperrefine.ui.component.pref.HookSection
@@ -17,14 +18,13 @@ import cn.ianzb.hyperrefine.ui.util.LocalSubPageScrollBehavior
 import cn.ianzb.hyperrefine.ui.util.pageScrollModifiers
 
 /**
- * 「系统应用」二级页（设置 / 短信 / 联系人等 MIUIX 应用）。
+ * 「应用美化」二级页。
  *
- * - 顶栏渐变：总开关 / 模糊强度 / 不透明度
- * - 应用专属适配：统一开关 + 笔记 / 计算器 / 文件管理
+ * 收纳针对各系统应用（MIUIX）的外观类功能；目前包含「渐变模糊」。
  */
-class SystemAppsActivity : BaseSubPageActivity() {
+class AppBeautifyActivity : BaseSubPageActivity() {
 
-    override val titleRes: Int = R.string.feature_system_apps
+    override val titleRes: Int = R.string.feature_app_beautify
 
     override val topBarActions: (@Composable () -> Unit)? =
         { QuickActionsAction(MiuixAppLoad.MIUIX_PACKAGES) }
@@ -34,23 +34,12 @@ class SystemAppsActivity : BaseSubPageActivity() {
         isBlurEnabled: Boolean,
         contentPadding: PaddingValues,
     ) {
+        val context = LocalContext.current
         val scrollBehavior = LocalSubPageScrollBehavior.current
         val section = HookSection(
-            titleRes = R.string.section_top_bar,
+            titleRes = R.string.section_app_blur,
             specs = listOf(
-                featureSpec(TopBarKeys.KEY),
-                featureSpec(TopBarKeys.STRENGTH),
-                featureSpec(TopBarKeys.OPACITY),
-            ),
-        )
-        // 应用专属适配：统一开关 + 笔记 / 计算器 / 文件管理单独开关。
-        val advancedSection = HookSection(
-            titleRes = R.string.section_top_bar_advanced,
-            specs = listOf(
-                featureSpec(TopBarKeys.ADVANCED),
-                featureSpec(TopBarKeys.ADVANCED_NOTES),
-                featureSpec(TopBarKeys.ADVANCED_CALCULATOR),
-                featureSpec(TopBarKeys.ADVANCED_FILE_EXPLORER),
+                featureSpec(KEY_TOP_BAR_BLUR),
             ),
         )
         LazyColumn(
@@ -68,10 +57,12 @@ class SystemAppsActivity : BaseSubPageActivity() {
                 ),
             contentPadding = contentPadding,
         ) {
-            listOf(section, advancedSection).forEach { sec ->
-                item {
-                    HookSectionCard(sec) {
-                        sec.specs.forEach { HookOptionView(it) }
+            item {
+                HookSectionCard(section) {
+                    section.specs.forEach { spec ->
+                        HookOptionView(spec = spec) {
+                            context.startActivity(Intent(context, TopBarBlurActivity::class.java))
+                        }
                     }
                 }
             }

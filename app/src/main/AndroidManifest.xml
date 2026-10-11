@@ -82,7 +82,15 @@
             android:exported="false"
             android:theme="@style/Theme.HyperRefine" />
         <activity
-            android:name=".ui.screen.features.SystemAppsActivity"
+            android:name=".ui.screen.features.AppBeautifyActivity"
+            android:exported="false"
+            android:theme="@style/Theme.HyperRefine" />
+        <activity
+            android:name=".ui.screen.features.TopBarBlurActivity"
+            android:exported="false"
+            android:theme="@style/Theme.HyperRefine" />
+        <activity
+            android:name=".ui.screen.features.WindowManagerActivity"
             android:exported="false"
             android:theme="@style/Theme.HyperRefine" />
         <activity

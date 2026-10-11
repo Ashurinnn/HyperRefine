@@ -24,6 +24,7 @@ import cn.ianzb.hyperrefine.hook.systemui.FiveGSwitchHook
 import cn.ianzb.hyperrefine.hook.systemui.VolumeBarKeys
 import cn.ianzb.hyperrefine.hook.systemui.glass.CcGlassKeys
 import cn.ianzb.hyperrefine.hook.systemui.radius.CcRadiusKeys
+import cn.ianzb.hyperrefine.hook.systemui.SplitScreenKeys
 import cn.ianzb.hyperrefine.hook.voiceassist.ScreenRecognitionRadiusHook
 import cn.ianzb.hyperrefine.hook.weather.WeatherKeys
 import cn.ianzb.hyperrefine.prefs.OptionSpec
@@ -51,7 +52,7 @@ fun FeaturesPageView(
             HookSection(
                 specs = listOf(
                     specByKey(specs, KEY_SYSTEM_UI),
-                    specByKey(specs, KEY_SYSTEM_APPS),
+                    specByKey(specs, KEY_APP_BEAUTIFY),
                     specByKey(specs, KEY_DEVICE_CONNECT),
                     specByKey(specs, KEY_SECURITY_CENTER),
                     specByKey(specs, KEY_VOICE_ASSIST),
@@ -78,6 +79,7 @@ fun FeaturesPageView(
                     specByKey(specs, KEY_APP_VOLUME),
                     specByKey(specs, KEY_VOLUME_BAR_LAYOUT),
                     specByKey(specs, KEY_AOD),
+                    specByKey(specs, KEY_WINDOW_MANAGER),
                 ),
                 onOpen = { context.startActivity(Intent(context, SystemUiActivity::class.java)) },
                 subPages = listOf(
@@ -131,12 +133,31 @@ fun FeaturesPageView(
                         specs = aodSpecs(specs),
                         onOpen = { context.startActivity(Intent(context, AodActivity::class.java)) },
                     ),
+                    HookSubPage(
+                        titleRes = R.string.feature_window_manager,
+                        specs = listOf(
+                            specByKey(specs, SplitScreenKeys.UNLOCK_DIRECTION),
+                            specByKey(specs, SplitScreenKeys.MULTIPLE_SPLIT_CUSTOM),
+                            specByKey(specs, SplitScreenKeys.MULTIPLE_SPLIT_MAX_STAGES),
+                            specByKey(specs, SplitScreenKeys.SINGLE_SPLIT_FREE_RATIO),
+                            specByKey(specs, SplitScreenKeys.SPLIT_RATIO_MEMORY),
+                            specByKey(specs, SplitScreenKeys.CAPTION_BOTH_DIRECTIONS),
+                        ),
+                        onOpen = { context.startActivity(Intent(context, WindowManagerActivity::class.java)) },
+                    ),
                 ),
             ),
             HookSubPage(
-                titleRes = R.string.feature_system_apps,
-                specs = topBarSpecs(specs),
-                onOpen = { context.startActivity(Intent(context, SystemAppsActivity::class.java)) },
+                titleRes = R.string.feature_app_beautify,
+                specs = listOf(specByKey(specs, KEY_TOP_BAR_BLUR)),
+                onOpen = { context.startActivity(Intent(context, AppBeautifyActivity::class.java)) },
+                subPages = listOf(
+                    HookSubPage(
+                        titleRes = R.string.feature_top_bar_blur,
+                        specs = topBarSpecs(specs),
+                        onOpen = { context.startActivity(Intent(context, TopBarBlurActivity::class.java)) },
+                    ),
+                ),
             ),
             HookSubPage(
                 titleRes = R.string.device_connect,
@@ -188,8 +209,8 @@ fun FeaturesPageView(
             when (spec.key) {
                 KEY_SYSTEM_UI ->
                     context.startActivity(Intent(context, SystemUiActivity::class.java))
-                KEY_SYSTEM_APPS ->
-                    context.startActivity(Intent(context, SystemAppsActivity::class.java))
+                KEY_APP_BEAUTIFY ->
+                    context.startActivity(Intent(context, AppBeautifyActivity::class.java))
                 KEY_SECURITY_CENTER ->
                     context.startActivity(Intent(context, SecurityCenterActivity::class.java))
                 KEY_DEVICE_CONNECT ->
@@ -229,7 +250,9 @@ fun FeaturesPageView(
 }
 
 const val KEY_SYSTEM_UI = "feature_system_ui"
-const val KEY_SYSTEM_APPS = "feature_system_apps"
+const val KEY_APP_BEAUTIFY = "feature_app_beautify"
+const val KEY_TOP_BAR_BLUR = "feature_top_bar_blur"
+const val KEY_WINDOW_MANAGER = "feature_window_manager"
 const val KEY_GLASS = "feature_glass"
 const val KEY_EXPERIMENTAL = "feature_experimental"
 const val KEY_WEATHER = "feature_weather"
@@ -477,9 +500,19 @@ internal fun featureSpecs(): List<OptionSpec> {
             titleRes = R.string.feature_system_ui,
         ),
         OptionSpec(
-            key = KEY_SYSTEM_APPS,
+            key = KEY_APP_BEAUTIFY,
             type = OptionType.ARROW,
-            titleRes = R.string.feature_system_apps,
+            titleRes = R.string.feature_app_beautify,
+        ),
+        OptionSpec(
+            key = KEY_TOP_BAR_BLUR,
+            type = OptionType.ARROW,
+            titleRes = R.string.feature_top_bar_blur,
+        ),
+        OptionSpec(
+            key = KEY_WINDOW_MANAGER,
+            type = OptionType.ARROW,
+            titleRes = R.string.feature_window_manager,
         ),
         OptionSpec(
             key = KEY_GLASS,
@@ -510,6 +543,99 @@ internal fun featureSpecs(): List<OptionSpec> {
             key = KEY_APP_VOLUME,
             type = OptionType.ARROW,
             titleRes = R.string.app_volume_section,
+        ),
+        OptionSpec(
+            key = SplitScreenKeys.UNLOCK_DIRECTION,
+            type = OptionType.SWITCH,
+            titleRes = R.string.sosc_unlock_split_direction,
+            summaryRes = R.string.sosc_unlock_split_direction_summary,
+            defaultBoolean = false,
+            targetPackages = systemUi,
+            deviceScope = setOf(DeviceType.PAD),
+            showStatus = true,
+        ),
+        OptionSpec(
+            key = SplitScreenKeys.MULTIPLE_SPLIT_CUSTOM,
+            type = OptionType.SWITCH,
+            titleRes = R.string.multiple_split_stages_custom,
+            summaryRes = R.string.multiple_split_stages_custom_summary,
+            defaultBoolean = false,
+            targetPackages = systemUi,
+            showStatus = true,
+        ),
+        OptionSpec(
+            key = SplitScreenKeys.MULTIPLE_SPLIT_MAX_STAGES,
+            type = OptionType.SLIDER,
+            titleRes = R.string.multiple_split_max_stages,
+            sliderValueLabelRes = R.string.multiple_split_max_stages,
+            defaultFloat = SplitScreenKeys.DEFAULT_STAGES.toFloat(),
+            sliderMin = SplitScreenKeys.MIN_STAGES.toFloat(),
+            sliderMax = SplitScreenKeys.MAX_STAGES.toFloat(),
+            sliderStep = 1f,
+            sliderDecimals = 0,
+            targetPackages = systemUi,
+            dependsOn = SplitScreenKeys.MULTIPLE_SPLIT_CUSTOM,
+        ),
+        OptionSpec(
+            key = SplitScreenKeys.MULTIPLE_SPLIT_FREE_RATIO,
+            type = OptionType.SWITCH,
+            titleRes = R.string.multiple_split_free_ratio,
+            summaryRes = R.string.multiple_split_free_ratio_summary,
+            defaultBoolean = false,
+            targetPackages = systemUi,
+            deviceScope = setOf(DeviceType.PAD),
+            showStatus = true,
+        ),
+        OptionSpec(
+            key = SplitScreenKeys.SINGLE_SPLIT_FREE_RATIO,
+            type = OptionType.SWITCH,
+            titleRes = R.string.sosc_single_split_free_ratio,
+            summaryRes = R.string.sosc_single_split_free_ratio_summary,
+            defaultBoolean = false,
+            targetPackages = systemUi,
+            deviceScope = setOf(DeviceType.PAD),
+            showStatus = true,
+        ),
+        OptionSpec(
+            key = SplitScreenKeys.SPLIT_FREE_RATIO_GLOBAL,
+            type = OptionType.SWITCH,
+            titleRes = R.string.sosc_split_free_ratio_global,
+            summaryRes = R.string.sosc_split_free_ratio_global_summary,
+            defaultBoolean = false,
+            targetPackages = systemUi,
+            deviceScope = setOf(DeviceType.PAD),
+            showStatus = true,
+        ),
+        OptionSpec(
+            key = SplitScreenKeys.SPLIT_RATIO_MEMORY,
+            type = OptionType.SWITCH,
+            titleRes = R.string.sosc_split_ratio_memory,
+            summaryRes = R.string.sosc_split_ratio_memory_summary,
+            defaultBoolean = false,
+            targetPackages = systemUi,
+            deviceScope = setOf(DeviceType.PAD),
+            showStatus = true,
+        ),
+        OptionSpec(
+            key = SplitScreenKeys.SPLIT_PEEK_TRANSITION,
+            type = OptionType.SWITCH,
+            titleRes = R.string.sosc_split_peek_transition,
+            summaryRes = R.string.sosc_split_peek_transition_summary,
+            defaultBoolean = false,
+            targetPackages = systemUi,
+            deviceScope = setOf(DeviceType.PAD),
+            showStatus = true,
+        ),
+        OptionSpec(
+            key = SplitScreenKeys.CAPTION_BOTH_DIRECTIONS,
+            type = OptionType.SWITCH,
+            titleRes = R.string.mulwin_caption_both_directions,
+            summaryRes = R.string.mulwin_caption_both_directions_summary,
+            defaultBoolean = false,
+            targetPackages = systemUi,
+            deviceScope = setOf(DeviceType.PAD),
+            dependsOn = SplitScreenKeys.UNLOCK_DIRECTION,
+            showStatus = true,
         ),
         OptionSpec(
             key = KEY_DEVICE_CENTER_HIDE_MORE,
