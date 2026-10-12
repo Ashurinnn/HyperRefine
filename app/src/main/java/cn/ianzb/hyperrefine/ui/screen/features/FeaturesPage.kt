@@ -25,6 +25,7 @@ import cn.ianzb.hyperrefine.hook.systemui.VolumeBarKeys
 import cn.ianzb.hyperrefine.hook.systemui.glass.CcGlassKeys
 import cn.ianzb.hyperrefine.hook.systemui.radius.CcRadiusKeys
 import cn.ianzb.hyperrefine.hook.systemui.SplitScreenKeys
+import cn.ianzb.hyperrefine.hook.systemui.wallpaper.WallpaperDimKeys
 import cn.ianzb.hyperrefine.hook.voiceassist.ScreenRecognitionRadiusHook
 import cn.ianzb.hyperrefine.hook.weather.WeatherKeys
 import cn.ianzb.hyperrefine.prefs.OptionSpec
@@ -79,6 +80,7 @@ fun FeaturesPageView(
                     specByKey(specs, KEY_APP_VOLUME),
                     specByKey(specs, KEY_VOLUME_BAR_LAYOUT),
                     specByKey(specs, KEY_AOD),
+                    specByKey(specs, KEY_WALLPAPER),
                     specByKey(specs, KEY_WINDOW_MANAGER),
                 ),
                 onOpen = { context.startActivity(Intent(context, SystemUiActivity::class.java)) },
@@ -132,6 +134,11 @@ fun FeaturesPageView(
                         titleRes = R.string.aod_section,
                         specs = aodSpecs(specs),
                         onOpen = { context.startActivity(Intent(context, AodActivity::class.java)) },
+                    ),
+                    HookSubPage(
+                        titleRes = R.string.section_wallpaper,
+                        specs = wallpaperSpecs(specs),
+                        onOpen = { context.startActivity(Intent(context, WallpaperActivity::class.java)) },
                     ),
                     HookSubPage(
                         titleRes = R.string.feature_window_manager,
@@ -270,10 +277,13 @@ const val KEY_PASSKEY = "feature_passkey"
 const val KEY_BROWSER = "feature_browser"
 const val KEY_NETWORK = "feature_network"
 const val KEY_AOD = "feature_aod"
+const val KEY_WALLPAPER = "feature_wallpaper"
 const val KEY_FIVE_G = FiveGSwitchHook.KEY
 const val KEY_AOD_BATTERY = AodBatteryStyleHook.KEY
 const val KEY_AOD_FULL = AodFullScreenKeepHook.KEY
 const val KEY_AOD_BOTTOM_ICONS = AodBottomIconsHook.KEY
+const val KEY_WALLPAPER_DIM = WallpaperDimKeys.ENABLED
+const val KEY_WALLPAPER_DIM_AMOUNT = WallpaperDimKeys.AMOUNT
 const val KEY_CLIPBOARD_SYNC_BOOST = ConnectKeys.CLIPBOARD_SYNC_BOOST
 const val KEY_SR_ANIMATION_RADIUS = ScreenRecognitionRadiusHook.KEY
 const val KEY_VOICE_ASSIST = "feature_voice_assist"
@@ -383,6 +393,13 @@ private fun aodSpecs(specs: List<OptionSpec>): List<OptionSpec> =
         specByKey(specs, KEY_AOD_BATTERY),
         specByKey(specs, KEY_AOD_FULL),
         specByKey(specs, KEY_AOD_BOTTOM_ICONS),
+    )
+
+/** 「壁纸」二级页内的配置项，用于功能页搜索直达。 */
+private fun wallpaperSpecs(specs: List<OptionSpec>): List<OptionSpec> =
+    listOf(
+        specByKey(specs, KEY_WALLPAPER_DIM),
+        specByKey(specs, KEY_WALLPAPER_DIM_AMOUNT),
     )
 
 /** 多应用音量二级页内的配置项，用于功能页搜索直达。 */
@@ -693,6 +710,33 @@ internal fun featureSpecs(): List<OptionSpec> {
             key = KEY_AOD,
             type = OptionType.ARROW,
             titleRes = R.string.aod_section,
+        ),
+        OptionSpec(
+            key = KEY_WALLPAPER,
+            type = OptionType.ARROW,
+            titleRes = R.string.section_wallpaper,
+        ),
+        OptionSpec(
+            key = KEY_WALLPAPER_DIM,
+            type = OptionType.SWITCH,
+            titleRes = R.string.wallpaper_dark_dim,
+            summaryRes = R.string.wallpaper_dark_dim_summary,
+            defaultBoolean = false,
+            targetPackages = systemUi,
+            showStatus = true,
+        ),
+        OptionSpec(
+            key = KEY_WALLPAPER_DIM_AMOUNT,
+            type = OptionType.SLIDER,
+            titleRes = R.string.wallpaper_dark_dim_amount,
+            sliderValueLabelRes = R.string.wallpaper_dark_dim_amount,
+            defaultFloat = WallpaperDimKeys.DEFAULT_AMOUNT,
+            sliderMin = 0f,
+            sliderMax = 100f,
+            sliderStep = 1f,
+            sliderDecimals = 0,
+            targetPackages = systemUi,
+            dependsOn = KEY_WALLPAPER_DIM,
         ),
         OptionSpec(
             key = KEY_FIVE_G,

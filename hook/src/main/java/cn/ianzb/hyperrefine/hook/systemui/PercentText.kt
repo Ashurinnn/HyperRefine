@@ -25,8 +25,13 @@ object PercentText {
 
     private const val DEFAULT_SIZE = 13f
 
-    /** 图标低值 / 静音时的灰色（在插件 `color/toggle_slider_icon_color` #959595 基础上调亮）。 */
-    private const val GRAY_COLOR = 0xFFBFBFBF.toInt()
+    /**
+     * 图标低值 / 静音时的灰色。
+     *
+     * 与控制中心播放器组件「暂无播放」文案完全一致（插件
+     * `color/media_player_empty_state_text_color` = `#80ffffff`，即 50% 不透明度的白）。
+     */
+    private const val GRAY_COLOR = 0x80FFFFFF.toInt()
 
     /** 图标由灰变彩的进度阈值（插件为 `0.12f`）。 */
     private const val HIGHLIGHT_RATIO = 0.12f

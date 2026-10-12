@@ -62,6 +62,7 @@ class CcGlassHook : BaseHook() {
             hookToggleItems(systemCl)
             hookRingerButtons(pluginCl)
             hookSideVolume(pluginCl)
+            hookDeviceCenterGlass(pluginCl)
         }
     }
 
@@ -410,6 +411,67 @@ class CcGlassHook : BaseHook() {
         }
     }
 
+    /**
+     * 融合设备中心：圆形设备组件（每个设备 / 末尾「设备中心」入口）的柔光玻璃。
+     *
+     * 官方对这些圆形按钮套用的材质是 `ControlCenterMaterialTokens.deviceControlItemToken`，
+     * 它的 bionics 分支只有一层纯色（`SolidColorStyle(ic_device_center_item_bionic_bg_color)`），
+     * 因此开启「柔光玻璃」后这些按钮仍是实心圆、没有描边玻璃。
+     *
+     * 处理方式：在官方 `DeviceViewHolder#updateMaterialStyle` 之后，改为套用官方融合设备中心
+     * 卡片同款材质 token（`deviceItemToken`，含柔光玻璃与一级磁贴色板）。
+     * 与播放器页设备卡片一致：直接拼底层 SDF 玻璃在首次展示时会发灰 / 过糊，走官方 token
+     * 才会一次成型。该方法在绑定、配置变化、材质模式变化时都会被调用，覆盖所有重绘时机。
+     */
+    private fun hookDeviceCenterGlass(pluginCl: ClassLoader) {
+        DEVICE_HOLDER_CLASSES.forEach { className ->
+            val cls = Reflect.findClassIfExists(className, pluginCl) ?: return@forEach
+            val method = cls.declaredMethods.firstOrNull {
+                it.name == "updateMaterialStyle" && it.parameterCount == 1
+            } ?: return@forEach
+            method.isAccessible = true
+            runCatching {
+                HookHelper.hookAfter(method) { param ->
+                    if (!master()) return@hookAfter
+                    val container = deviceContainer(param.thisObject) ?: return@hookAfter
+                    applyDeviceItemGlass(container)
+                }
+            }.onFailure { HookHelper.log("$tag: hook $className#updateMaterialStyle failed", it) }
+        }
+    }
+
+    /** 从 `DeviceViewHolder` 取圆形按钮视图（`binding.container`）。 */
+    private fun deviceContainer(holder: Any?): View? {
+        val viewHolder = holder ?: return null
+        val binding = runCatching { Reflect.getObjectField(viewHolder, "binding") }.getOrNull() ?: return null
+        return runCatching { Reflect.getObjectField(binding, "container") as? View }.getOrNull()
+    }
+
+    /**
+     * 圆形设备按钮套玻璃。
+     *
+     * 清掉纯色背景后系统自带的 oval 轮廓也会消失，玻璃会被画成方块，故这里显式设置圆形轮廓；
+     * 尺寸为 0（尚未布局）时等下一帧再套，避免按 0 尺寸算出错误参数；首次套用时面板材质 /
+     * 背景可能尚未就绪，故布局完成后再补套一次（与播放器页设备卡片同样的处理）。
+     */
+    private fun applyDeviceItemGlass(container: View) {
+        if (container.width == 0 || container.height == 0) {
+            container.post { if (master()) runCatching { applyDeviceItemGlass(container) } }
+            return
+        }
+        styleDeviceItemGlass(container)
+        container.post { if (master()) runCatching { styleDeviceItemGlass(container) } }
+    }
+
+    private fun styleDeviceItemGlass(container: View) {
+        if (outlined[container] != true) {
+            outlined[container] = true
+            makeCircular(container)
+        }
+        if (container.background != null) container.background = null
+        CcGlassApi.apply(container, TOKEN_DEVICE_ITEM)
+    }
+
     // ---------------- 「更多设置」按钮 ----------------
 
     /** 点击时系统会重新套用实心 token，导致玻璃消失；这里在状态变化后重套默认玻璃。 */
@@ -502,6 +564,9 @@ class CcGlassHook : BaseHook() {
         private const val TOKEN_DEFAULT = "DEFAULT_GLASS_TOKEN"
         private const val TOKEN_ACTIVATED = "ACTIVATED_GLASS_TOKEN"
 
+        /** 融合设备中心卡片同款材质（含柔光玻璃）；圆形设备组件复用它。 */
+        private const val TOKEN_DEVICE_ITEM = "DeviceItemToken"
+
         private const val SECONDARY_BASE =
             "miui.systemui.controlcenter.panel.secondary.SecondaryPanelControllerBase"
         private const val TILE_ICON_CLASS =
@@ -517,6 +582,12 @@ class CcGlassHook : BaseHook() {
             "com.android.systemui.miui.volume.VolumePanelViewController"
         private const val OUTLINE_PROVIDER_CLASS =
             "com.android.systemui.util.ViewUtils\$setCustomOutline\$1"
+
+        /** 融合设备中心的圆形组件：每个设备 + 末尾「融合设备中心」入口。 */
+        private val DEVICE_HOLDER_CLASSES = listOf(
+            "miui.systemui.controlcenter.panel.main.devicecenter.devices.DeviceItemViewHolder",
+            "miui.systemui.controlcenter.panel.main.devicecenter.devices.DetailViewHolder",
+        )
 
         private const val GROUP_SINGLE = 1
         private const val GROUP_FIRST = 2

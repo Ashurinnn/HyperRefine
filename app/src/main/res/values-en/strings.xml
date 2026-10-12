@@ -282,14 +282,18 @@
  <string name="aod_full_screen_keep_summary">After using the lock-screen camera/flashlight, still show the full-screen (dimmed lock screen) AOD instead of the plain black clock</string>
  <string name="aod_keep_bottom_icons">Keep shortcut icons on AOD</string>
  <string name="aod_keep_bottom_icons_summary">Don’t hide the lock-screen bottom-left/right shortcut icons on the AOD, so the flashlight/camera entries stay visible while the screen is off</string>
+ <string name="section_wallpaper">Wallpaper</string>
+ <string name="wallpaper_dark_dim">Dim wallpaper in dark mode</string>
+ <string name="wallpaper_dark_dim_summary">Automatically dim the wallpaper in dark mode and restore it in light mode</string>
+ <string name="wallpaper_dark_dim_amount">Dim amount</string>
  <string name="sr_animation_radius">Match corner radius of the recognition animation</string>
  <string name="sr_animation_radius_summary">Start Xiao Ai’s screen-recognition shrink animation from the device’s rounded corners, removing the square corners at the start</string>
  <string name="section_voice_assist">Xiao Ai</string>
  <string name="section_screen_recognition">Screen recognition</string>
 
     <string name="section_cc_glass">Soft glass</string>
-    <string name="cc_glass_master">Enable soft glass</string>
-    <string name="cc_glass_master_summary">Apply the same soft glass as the top level to Control Center secondary panels</string>
+    <string name="cc_glass_master">Soft glass in more scenes</string>
+    <string name="cc_glass_master_summary">Extend soft glass to more places in Control Center</string>
     <string name="cc_glass_theme_material">Force material under third-party themes</string>
     <string name="cc_glass_theme_material_summary">Force-enable the system soft glass under third-party themes</string>
 
@@ -407,7 +411,7 @@
     <string name="about_telegram">Telegram Group</string>
     <string name="about_telegram_summary">https://t.me/HyperRefine</string>
     <string name="about_dependencies">Third Party Licenses &amp; Credits</string>
-    <string name="about_based_on">Based on MiuixGuiTemplate 0.5.3</string>
+    <string name="about_based_on">Based on MiuixGuiTemplate 0.5.4</string>
     <string name="license_agpl">GNU AGPL v3.0</string>
     <string name="license_agpl_summary">View full license text</string>
     <string name="third_party_licenses_title">Third Party Licenses &amp; Credits</string>

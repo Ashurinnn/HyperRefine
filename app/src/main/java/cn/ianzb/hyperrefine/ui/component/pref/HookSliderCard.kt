@@ -19,6 +19,7 @@ import androidx.compose.ui.unit.dp
 import cn.ianzb.hyperrefine.R
 import cn.ianzb.hyperrefine.prefs.ConfigState
 import cn.ianzb.hyperrefine.prefs.OptionSpec
+import cn.ianzb.hyperrefine.ui.util.claimPagerSwipe
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.basic.TextField
@@ -83,6 +84,8 @@ fun HookSliderCard(
             SliderPreference(
                 value = value,
                 onValueChange = { ConfigState.set(spec.key, roundToDecimals(it, spec.sliderDecimals)) },
+                // 按下即认领横向手势：避免主页 Pager 的 Cross-Axis 拦截吞掉滑条拖拽
+                modifier = Modifier.claimPagerSwipe(),
                 valueRange = spec.sliderMin..spec.sliderMax,
                 steps = sliderSteps(spec),
                 title = valueLabel,

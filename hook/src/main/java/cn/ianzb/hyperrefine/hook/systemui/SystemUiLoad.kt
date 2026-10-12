@@ -9,11 +9,14 @@ import cn.ianzb.hyperrefine.hook.systemui.glass.CcGlassKeys
 import cn.ianzb.hyperrefine.hook.systemui.glass.CcMaterialGateHook
 import cn.ianzb.hyperrefine.hook.systemui.radius.CcRadiusHook
 import cn.ianzb.hyperrefine.hook.systemui.radius.CcRadiusKeys
+import cn.ianzb.hyperrefine.hook.systemui.wallpaper.WallpaperDarkDimHook
+import cn.ianzb.hyperrefine.hook.systemui.wallpaper.WallpaperDimKeys
 
 /**
  * 系统界面（com.android.systemui）目标 Load：
  * 控制中心音量条 / 控制中心亮度条 / 侧边音量条的百分比数值显示，
- * 以及融合设备中心隐藏末尾「…」省略卡片、缩小设备点击判定范围。
+ * 融合设备中心隐藏末尾「…」省略卡片、缩小设备点击判定范围，
+ * 以及深色模式自动压暗壁纸。
  */
 class SystemUiLoad : BaseLoad() {
 
@@ -44,6 +47,7 @@ class SystemUiLoad : BaseLoad() {
         initHook(CcGlassHook(), HookPrefs.getBoolean(CcGlassHook.KEY, false))
         initHook(SideGlassMirrorHook(), HookPrefs.getBoolean(CcGlassKeys.MASTER, false))
         initHook(CcMaterialGateHook(), HookPrefs.getBoolean(CcGlassKeys.THEME_MATERIAL, false))
+        initHook(WallpaperDarkDimHook(), HookPrefs.getBoolean(WallpaperDimKeys.ENABLED, false))
         // 总开关开启，或任一组件的单项自定义开启，即挂载圆角 hook
         // （总开关关闭时单项自定义仍生效，未自定义的组件保持系统默认）。
         val radiusEnabled = HookPrefs.getBoolean(CcRadiusKeys.MASTER, false) ||

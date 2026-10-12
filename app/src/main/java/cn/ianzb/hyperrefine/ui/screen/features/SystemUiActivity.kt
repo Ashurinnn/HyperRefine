@@ -23,6 +23,7 @@ import cn.ianzb.hyperrefine.ui.util.pageScrollModifiers
  * - 控制中心：柔光玻璃、圆角调整、亮度条、融合设备中心、网络
  * - 音量：控制中心音量条、侧边音量条、多应用音量、音量条布局
  * - 锁屏与息屏：息屏显示
+ * - 壁纸：深色模式自动压暗壁纸
  */
 class SystemUiActivity : BaseSubPageActivity() {
 
@@ -63,6 +64,12 @@ class SystemUiActivity : BaseSubPageActivity() {
                 featureSpec(KEY_AOD),
             ),
         )
+        val wallpaperSection = HookSection(
+            titleRes = R.string.section_wallpaper,
+            specs = listOf(
+                featureSpec(KEY_WALLPAPER),
+            ),
+        )
         // 分屏 / 多分屏等窗口能力单独成页；改动需重启系统界面生效。
         val windowSection = HookSection(
             titleRes = R.string.section_split_window,
@@ -93,6 +100,8 @@ class SystemUiActivity : BaseSubPageActivity() {
                     context.startActivity(Intent(context, VolumeBarLayoutActivity::class.java))
                 KEY_AOD ->
                     context.startActivity(Intent(context, AodActivity::class.java))
+                KEY_WALLPAPER ->
+                    context.startActivity(Intent(context, WallpaperActivity::class.java))
                 KEY_WINDOW_MANAGER ->
                     context.startActivity(Intent(context, WindowManagerActivity::class.java))
             }
@@ -113,7 +122,7 @@ class SystemUiActivity : BaseSubPageActivity() {
                 ),
             contentPadding = contentPadding,
         ) {
-            listOf(controlCenterSection, volumeSection, lockAodSection, windowSection).forEach { section ->
+            listOf(controlCenterSection, volumeSection, lockAodSection, wallpaperSection, windowSection).forEach { section ->
                 item {
                     HookSectionCard(section) {
                         section.specs.forEach { spec ->

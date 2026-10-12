@@ -282,14 +282,18 @@
  <string name="aod_full_screen_keep_summary">从锁屏相机 / 手电筒返回息屏时，仍显示全屏（压暗锁屏内容）的息屏界面，而不是只显示时间的纯黑界面</string>
  <string name="aod_keep_bottom_icons">息屏保留快捷功能图标</string>
  <string name="aod_keep_bottom_icons_summary">息屏时不隐藏锁屏左下角 / 右下角的快捷功能图标，让手电筒、相机等入口在息屏界面依然可见</string>
+ <string name="section_wallpaper">壁纸</string>
+ <string name="wallpaper_dark_dim">深色模式自动压暗壁纸</string>
+ <string name="wallpaper_dark_dim_summary">深色模式下自动压暗壁纸，切回浅色模式时自动恢复</string>
+ <string name="wallpaper_dark_dim_amount">压暗程度</string>
  <string name="sr_animation_radius">识屏动画圆角适配</string>
  <string name="sr_animation_radius_summary">超级小爱识屏的缩小动画从屏幕自带圆角开始过渡，消除动画起始时的直角</string>
  <string name="section_voice_assist">超级小爱</string>
  <string name="section_screen_recognition">识屏</string>
 
     <string name="section_cc_glass">柔光玻璃</string>
-    <string name="cc_glass_master">启用柔光玻璃</string>
-    <string name="cc_glass_master_summary">为控制中心二级面板的按钮与卡片套用与一级一致的柔光玻璃</string>
+    <string name="cc_glass_master">更多场景启用柔光玻璃</string>
+    <string name="cc_glass_master_summary">柔光玻璃的适用范围扩展到更多控制中心位置</string>
     <string name="cc_glass_theme_material">第三方主题下强制启用材质</string>
     <string name="cc_glass_theme_material_summary">使用第三方主题时也强制启用系统柔光玻璃</string>
 
@@ -407,7 +411,7 @@
     <string name="about_telegram">Telegram 群组</string>
     <string name="about_telegram_summary">https://t.me/HyperRefine</string>
     <string name="about_dependencies">第三方许可证与致谢</string>
-    <string name="about_based_on">Based on MiuixGuiTemplate 0.5.3</string>
+    <string name="about_based_on">Based on MiuixGuiTemplate 0.5.4</string>
     <string name="license_agpl">GNU AGPL v3.0</string>
     <string name="license_agpl_summary">查看完整协议文本</string>
     <string name="third_party_licenses_title">第三方许可证与致谢</string>

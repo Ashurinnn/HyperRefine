@@ -38,6 +38,19 @@ import cn.ianzb.hyperrefine.hook.xposed.Reflect
  *    这里把自由松手改写为一次「几乎不动」的官方 fling（起点挪到目标旁 1px，时长保持官方
  *    传入的 250ms）：逐帧更新、收尾时机与标志维护全部交给官方实现，视觉上不产生位移，
  *    同时补齐拖拽预览回弹（窗口整体缩放 0.969 → 1.0 的「放大」动画）所需的动画帧。
+ * 5. 「进入分屏保留上次比例」：进入分屏（尚未激活）时，系统会沿三条路径把分割线重置回预设
+ *    的 1:1——关闭手势预测（`setDivideRatioOnGestureEnd`）、分屏模式切换
+ *    （`startPendingSplitModeChange`）、进入分屏布局（`SplitLayout#resetDividerPosition` /
+ *    `SplitLayout#setDivideRatio(1)`）。前两条路径内部的强制回中在本文件里被抑制；
+ *    第三条在官方调用返回后立即恢复调用前的位置（越界时收敛到合法档位范围），
+ *    因此关闭另一个应用 / 重新进入（单应用或双应用）分屏都会保留上次的比例，
+ *    不再自动跳到系统预设档位。
+ * 6. 「回到桌面不重置比例」：应用退到后台、回到桌面且处于半屏时，桌面（`com.miui.home`）会主动
+ *    调用 `ISoScSplitScreen#setSplitRatio(1)` 把分割线重置回 1:1（桌面日志原文
+ *    `[LauncherSoscController] _resetSplitRatio: resetting to 1:1`）。该调用经由
+ *    `SoScSplitScreenController$ISplitScreenImpl#setSplitRatio` 进入系统界面；本文件在这个
+ *    Binder 服务端方法上用 `Binder.getCallingUid()` 区分来源，忽略「其它进程（桌面）发来的
+ *    1:1 重置」，系统界面内部（用户自己的操作）完全不受影响。
  */
 class SingleSplitFreeRatioHook : BaseHook() {
 
@@ -85,9 +98,24 @@ class SingleSplitFreeRatioHook : BaseHook() {
     @Volatile
     private var releaseInFlight = false
 
-    /** `setToDefaultSplitRatioIfNeed` 执行期间置位：期间跳过 `setDivideRatioForSoSc`（不重置比例）。 */
+    /**
+     * 「强制回中」抑制计数：`setToDefaultSplitRatioIfNeed`、`setDivideRatioOnGestureEnd`、
+     * `startPendingSplitModeChange` 等路径的内部会对 `setDivideRatioForSoSc(1, …)` 把分割线
+     * 重置回 1:1；这些方法执行期间计数 > 0，令该调用直接返回 false（不重置比例）。
+     */
     @Volatile
-    private var suppressForcedRatio = false
+    private var suppressForcedRatioDepth = 0
+
+    /** 抑制是否生效。 */
+    private val suppressForcedRatio: Boolean
+        get() = suppressForcedRatioDepth > 0
+
+    /** 进入分屏（尚未激活）时暂存的分割线位置（像素）与占比：官方重置后立即恢复，保留上次比例。 */
+    private val entryKeepPosition = ThreadLocal<Int?>()
+    private val entryKeepRatio = ThreadLocal<Float?>()
+
+    /** 「进入分屏保留比例」的日志只打一次。 */
+    private var loggedEntryKeep = false
 
     override fun init() {
         val loader = target.classLoader ?: throw HookSkippedException("no classloader")
@@ -95,7 +123,8 @@ class SingleSplitFreeRatioHook : BaseHook() {
         stepless = HookPrefs.getBoolean(SplitScreenKeys.SPLIT_FREE_RATIO_GLOBAL, false)
         var hooked = hookSnap(loader) + hookSoScFindSnapTarget(loader) + hookForcedRatioReset(loader) +
             hookDividerFixedNormalize(loader) + hookReleaseTiming(loader) +
-            hookScaleBackGuard(loader) + hookSnapTargetLookup(loader)
+            hookScaleBackGuard(loader) + hookSnapTargetLookup(loader) + hookEntryRatioPreserve(loader) +
+            hookLauncherRatioReset(loader)
         if (hooked == 0) throw HookSkippedException("split ratio hooks not installed")
         HookHelper.log("$tag: hooked $hooked method(s) (stepless=$stepless, magnet=${magnetRadiusPx()}px)")
     }
@@ -355,10 +384,13 @@ class SingleSplitFreeRatioHook : BaseHook() {
     }
 
     /**
-     * 拦掉「设置系统强制比例」：`setToDefaultSplitRatioIfNeed` 内部会调
-     * `setDivideRatioForSoSc(1, …)` 把分割线重置回 1:1（关闭另一个应用、点把手时都会触发）。
-     * 这里在该方法执行期间把 `setDivideRatioForSoSc` 直接当作「无需调整」返回，
-     * 其余调用点（进入分屏等）保持官方行为。
+     * 拦掉「设置系统强制比例」：以下路径内部会调 `setDivideRatioForSoSc(1, …)`
+     * 把分割线重置回 1:1——
+     * - `setToDefaultSplitRatioIfNeed`（关闭另一个应用、点把手等）；
+     * - `setDivideRatioOnGestureEnd`（拖拽把手收起一侧时的关闭手势预测）；
+     * - `startPendingSplitModeChange`（分屏模式切换收尾）。
+     * 这里在这些方法执行期间把 `setDivideRatioForSoSc` 直接当作「无需调整」返回，
+     * 其余调用点（进入分屏布局等）保持官方行为。
      */
     private fun hookForcedRatioReset(loader: ClassLoader): Int {
         var hooked = 0
@@ -368,11 +400,31 @@ class SingleSplitFreeRatioHook : BaseHook() {
             ?.also { method ->
                 method.isAccessible = true
                 runCatching {
-                    HookHelper.hookBefore(method) { suppressForcedRatio = true }
-                    HookHelper.hookAfter(method) { suppressForcedRatio = false }
+                    HookHelper.hookBefore(method) { pushSuppressForcedRatio() }
+                    HookHelper.hookAfter(method) { popSuppressForcedRatio() }
                     hooked++
                 }.onFailure { HookHelper.log("$tag: hook setToDefaultSplitRatioIfNeed failed", it) }
             } ?: HookHelper.log("$tag: $STAGE_COORDINATOR#setToDefaultSplitRatioIfNeed not found")
+        coordinatorCls?.declaredMethods
+            ?.firstOrNull { it.name == "setDivideRatioOnGestureEnd" && it.parameterCount == 2 }
+            ?.also { method ->
+                method.isAccessible = true
+                runCatching {
+                    HookHelper.hookBefore(method) { pushSuppressForcedRatio() }
+                    HookHelper.hookAfter(method) { popSuppressForcedRatio() }
+                    hooked++
+                }.onFailure { HookHelper.log("$tag: hook setDivideRatioOnGestureEnd failed", it) }
+            } ?: HookHelper.log("$tag: $STAGE_COORDINATOR#setDivideRatioOnGestureEnd not found")
+        coordinatorCls?.declaredMethods
+            ?.firstOrNull { it.name == "startPendingSplitModeChange" && it.parameterCount == 4 }
+            ?.also { method ->
+                method.isAccessible = true
+                runCatching {
+                    HookHelper.hookBefore(method) { pushSuppressForcedRatio() }
+                    HookHelper.hookAfter(method) { popSuppressForcedRatio() }
+                    hooked++
+                }.onFailure { HookHelper.log("$tag: hook startPendingSplitModeChange failed", it) }
+            } ?: HookHelper.log("$tag: $STAGE_COORDINATOR#startPendingSplitModeChange not found")
         val layoutCls = Reflect.findClassIfExists(SPLIT_LAYOUT, loader)
         layoutCls?.declaredMethods
             ?.firstOrNull { it.name == "setDivideRatioForSoSc" && it.parameterCount == 2 }
@@ -387,6 +439,131 @@ class SingleSplitFreeRatioHook : BaseHook() {
             } ?: HookHelper.log("$tag: $SPLIT_LAYOUT#setDivideRatioForSoSc not found")
         return hooked
     }
+
+    private fun pushSuppressForcedRatio() {
+        suppressForcedRatioDepth++
+    }
+
+    private fun popSuppressForcedRatio() {
+        if (suppressForcedRatioDepth > 0) suppressForcedRatioDepth--
+    }
+
+    /**
+     * 「进入分屏保留上次比例」（见类注释第 5 点）：
+     * `SplitLayout#resetDividerPosition` / `SplitLayout#setDivideRatio(1)` 会在进入分屏（尚未激活）
+     * 时把分割线重置回 1:1；这里在官方调用返回后立即把分割线放回调用前的位置
+     * （越界时收敛到合法档位范围），使进入分屏保留上次比例。
+     */
+    private fun hookEntryRatioPreserve(loader: ClassLoader): Int {
+        val layoutCls = Reflect.findClassIfExists(SPLIT_LAYOUT, loader) ?: run {
+            HookHelper.log("$tag: $SPLIT_LAYOUT not found (entry keep)")
+            return 0
+        }
+        var hooked = 0
+        layoutCls.declaredMethods
+            .firstOrNull { it.name == "resetDividerPosition" && it.parameterCount == 0 }
+            ?.also { method ->
+                method.isAccessible = true
+                runCatching {
+                    HookHelper.hookBefore(method) { param ->
+                        captureEntryPosition(param.thisObject)
+                    }
+                    HookHelper.hookAfter(method) { param ->
+                        restoreEntryPosition(param.thisObject)
+                    }
+                    hooked++
+                }.onFailure { HookHelper.log("$tag: hook resetDividerPosition failed", it) }
+            } ?: HookHelper.log("$tag: $SPLIT_LAYOUT#resetDividerPosition not found")
+        layoutCls.declaredMethods
+            .firstOrNull { it.name == "setDivideRatio" && it.parameterCount == 1 }
+            ?.also { method ->
+                method.isAccessible = true
+                runCatching {
+                    HookHelper.hookBefore(method) { param ->
+                        val ratio = param.args.getOrNull(0) as? Int
+                        if (ratio == MIDDLE_SNAP_POSITION) {
+                            captureEntryPosition(param.thisObject)
+                        } else {
+                            clearEntryKeep()
+                        }
+                    }
+                    HookHelper.hookAfter(method) { param ->
+                        restoreEntryPosition(param.thisObject)
+                    }
+                    hooked++
+                }.onFailure { HookHelper.log("$tag: hook setDivideRatio failed", it) }
+            } ?: HookHelper.log("$tag: $SPLIT_LAYOUT#setDivideRatio not found")
+        return hooked
+    }
+
+    /**
+     * 进入分屏（尚未激活）、且操作对象正是当前在用布局时，暂存分割线位置与占比；
+     * 其余情况不改写行为（例如首次创建布局、激活状态下的一般调用）。
+     */
+    private fun captureEntryPosition(layout: Any?): Boolean {
+        clearEntryKeep()
+        val cl = loader ?: return false
+        layout ?: return false
+        if (SplitScreenSupport.isSoScActive(cl)) return false
+        val live = SplitScreenSupport.splitLayout(cl) ?: return false
+        if (live !== layout) return false
+        val position = intField(layout, "mDividerPosition") ?: return false
+        entryKeepPosition.set(position)
+        entryKeepRatio.set(dividerRatio(layout))
+        return true
+    }
+
+    private fun clearEntryKeep() {
+        entryKeepPosition.remove()
+        entryKeepRatio.remove()
+    }
+
+    /** 官方重置后恢复暂存的比例：优先按「占比 × 当前分屏轴尺寸」换算并收敛到合法档位范围。 */
+    private fun restoreEntryPosition(layout: Any?) {
+        val savedPosition = entryKeepPosition.get() ?: return
+        val savedRatio = entryKeepRatio.get()
+        clearEntryKeep()
+        layout ?: return
+        val current = intField(layout, "mDividerPosition") ?: return
+        val candidate = dividerPositionForRatio(layout, savedRatio) ?: savedPosition
+        val algorithm = field(layout, "mDividerSnapAlgorithm")
+        val target = if (algorithm != null) {
+            snapRange(algorithm)?.let { candidate.coerceIn(it.first, it.second) } ?: candidate
+        } else {
+            candidate
+        }
+        if (target == current) return
+        runCatching { Reflect.callMethod(layout, "setDividerPosition", target, false) }
+            .onFailure { HookHelper.log("$tag: restore divider ratio failed", it) }
+        if (!loggedEntryKeep) {
+            loggedEntryKeep = true
+            HookHelper.log("$tag: split enter keeps last ratio (saved=$savedPosition, applied=$target)")
+        }
+    }
+
+    /** 分割线位置占分屏轴（左右分屏取宽、上下取高）尺寸的比例。 */
+    private fun dividerRatio(layout: Any): Float? = runCatching {
+        val leftRight = Reflect.getObjectField(layout, "mIsLeftRightSplit") as? Boolean
+            ?: return@runCatching null
+        val root = Reflect.callMethod(layout, "getRootBounds") as? android.graphics.Rect
+            ?: return@runCatching null
+        val dimension = if (leftRight) root.width() else root.height()
+        val position = intField(layout, "mDividerPosition") ?: return@runCatching null
+        if (dimension <= 0 || position <= 0) return@runCatching null
+        position.toFloat() / dimension
+    }.getOrNull()
+
+    /** 按占比换算当前位置；拿不到尺寸时返回 null（调用方回退到暂存像素值）。 */
+    private fun dividerPositionForRatio(layout: Any, ratio: Float?): Int? = runCatching {
+        ratio ?: return@runCatching null
+        val leftRight = Reflect.getObjectField(layout, "mIsLeftRightSplit") as? Boolean
+            ?: return@runCatching null
+        val root = Reflect.callMethod(layout, "getRootBounds") as? android.graphics.Rect
+            ?: return@runCatching null
+        val dimension = if (leftRight) root.width() else root.height()
+        if (dimension <= 0) return@runCatching null
+        (dimension * ratio).toInt()
+    }.getOrNull()
 
     private fun applyFreeSnap(loader: ClassLoader, param: HookParam) {
         normalizeDividerFixedIfNeeded()
@@ -432,6 +609,48 @@ class SingleSplitFreeRatioHook : BaseHook() {
     /** 磁吸半径（px），惰性换算一次。 */
     private fun magnetRadiusPx(): Int =
         magnetRadius ?: SplitScreenSupport.dpToPx(MAGNET_DP).also { magnetRadius = it }
+
+    /** 桌面 1:1 重置被忽略的日志只打一次。 */
+    private var loggedLauncherReset = false
+
+    /**
+     * 桌面（`com.miui.home`）在「应用退到后台、回到桌面且为半屏」时会主动调用
+     * `ISoScSplitScreen#setSplitRatio(1)` 把分割线重置回 1:1（桌面日志原文：
+     * `[LauncherSoscController] _resetSplitRatio: resetting to 1:1`）——这是本功能要解除的
+     * 又一条强制回中路径，且不属于已抑制的三条内部路径。
+     *
+     * 服务端实现 `SoScSplitScreenController$ISplitScreenImpl#setSplitRatio` 运行在 Binder
+     * 线程上，可用 `Binder.getCallingUid()` 精确区分来源：**只忽略来自其它进程（桌面）的
+     * 1:1 重置**；系统界面进程内部（用户自己的操作）完全不受影响。
+     */
+    private fun hookLauncherRatioReset(loader: ClassLoader): Int {
+        val cls = Reflect.findClassIfExists(SOSC_CONTROLLER_IMPL, loader) ?: run {
+            HookHelper.log("$tag: $SOSC_CONTROLLER_IMPL not found")
+            return 0
+        }
+        val method = cls.declaredMethods
+            .firstOrNull { it.name == "setSplitRatio" && it.parameterCount == 1 }
+            ?: run {
+                HookHelper.log("$tag: $SOSC_CONTROLLER_IMPL#setSplitRatio not found")
+                return 0
+            }
+        method.isAccessible = true
+        return runCatching {
+            HookHelper.hookBefore(method) { param ->
+                val ratio = param.args.getOrNull(0) as? Int ?: return@hookBefore
+                if (ratio != MIDDLE_SNAP_POSITION) return@hookBefore
+                val calling = runCatching { android.os.Binder.getCallingUid() }.getOrDefault(0)
+                if (calling == 0 || calling == android.os.Process.myUid()) return@hookBefore
+                param.setResultValue(null)
+                if (!loggedLauncherReset) {
+                    loggedLauncherReset = true
+                    HookHelper.log("$tag: launcher 1:1 reset ignored (callingUid=$calling)")
+                }
+            }
+            1
+        }.onFailure { HookHelper.log("$tag: hook $SOSC_CONTROLLER_IMPL#setSplitRatio failed", it) }
+            .getOrDefault(0)
+    }
 
     /** 是否处于「单个应用分屏」状态。 */
     private fun inSingleMode(loader: ClassLoader): Boolean = runCatching {
@@ -480,9 +699,14 @@ class SingleSplitFreeRatioHook : BaseHook() {
         const val STAGE_COORDINATOR = "com.android.wm.shell.sosc.SoScStageCoordinator"
         const val SPLIT_LAYOUT = "com.android.wm.shell.sosc.common.split.SplitLayout"
         const val SOSC_RESIZING_POLICY = "com.android.wm.shell.sosc.SoScResizingEffectPolicy"
+        const val SOSC_CONTROLLER_IMPL =
+            "com.android.wm.shell.sosc.SoScSplitScreenController\$ISplitScreenImpl"
 
         /** 官方自由吸附目标的 snapPosition（见 `DividerSnapAlgorithm#snap`）。 */
         const val FREE_SNAP_POSITION = 10
+
+        /** 官方「中间 1:1」档位（进入分屏时 `setDivideRatio(1)` 用到的 snapPosition）。 */
+        const val MIDDLE_SNAP_POSITION = 1
 
         /** 「关闭分屏」目标（`SplitScreenConstants.isDismissSnapPosition`）。 */
         const val DISMISS_START = 11
