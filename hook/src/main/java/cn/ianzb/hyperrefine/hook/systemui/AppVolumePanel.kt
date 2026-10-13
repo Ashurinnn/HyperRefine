@@ -43,9 +43,6 @@ object AppVolumePanel {
     private const val TAG = "AppVolumePanel"
 
     private const val PROVIDER_URI = "content://com.miui.misound.AppVolumeProvider/assistant"
-    private const val PLAYER_STATE_STARTED = 2
-    private const val USAGE_MEDIA = 1
-    private const val USAGE_ASSISTANCE_NAVIGATION_GUIDANCE = 12
 
     private const val MARGIN_DP = 16
     private const val SLOT_SIZE_DP = 32
@@ -201,7 +198,8 @@ object AppVolumePanel {
         hide()
         closing = false
         val density = context.resources.displayMetrics.density
-        val apps = activeApps(context)
+        // 正在播放的应用：与系统官方（音质音效 `playervolume.f.a`）完全同一套判定。
+        val apps = AppVolumePlayback.activePackages(context)
 
         // 无正在播放的应用时不显示面板（不再显示「当前无播放」占位）。
         if (apps.isEmpty()) {
@@ -741,23 +739,6 @@ object AppVolumePanel {
     }
 
     // ---------------- 数据 ----------------
-
-    private fun activeApps(context: Context): List<String> {
-        val am = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager ?: return emptyList()
-        val pm = context.packageManager
-        return runCatching {
-            am.activePlaybackConfigurations.mapNotNull { config ->
-                val uid = Reflect.callMethod(config, "getClientUid") as? Int ?: return@mapNotNull null
-                if (uid < 10000) return@mapNotNull null
-                val state = Reflect.callMethod(config, "getPlayerState") as? Int
-                if (state != PLAYER_STATE_STARTED) return@mapNotNull null
-                val attrs = Reflect.callMethod(config, "getAudioAttributes")
-                val usage = attrs?.let { Reflect.callMethod(it, "getUsage") as? Int }
-                if (usage != USAGE_MEDIA && usage != USAGE_ASSISTANCE_NAVIGATION_GUIDANCE) return@mapNotNull null
-                pm.getNameForUid(uid)
-            }.distinct()
-        }.getOrDefault(emptyList())
-    }
 
     private fun currentVolume(context: Context, pkg: String): Float {
         runCatching {

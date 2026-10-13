@@ -4,8 +4,6 @@ import android.content.Context
 import android.content.Intent
 import android.content.res.ColorStateList
 import android.graphics.Color
-import android.media.AudioAttributes
-import android.media.AudioManager
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -44,6 +42,12 @@ class AppVolumeEntryHook : BaseHook() {
 
     /** 整体居中平移：面板最近一次的上移目标，避免重复播放动画。 */
     private val lastShift = WeakHashMap<View, Float>()
+
+    /** 本轮侧边音量条显示期间，用户是否手动操作过入口（手动操作后不再自动展开面板）。 */
+    private val userToggled = WeakHashMap<View, Boolean>()
+
+    /** 「自动显示」重试中由本流程刷新入口状态，避免入口变化再次触发自动展开（递归）。 */
+    private var autoRefreshing = false
 
     // 插件资源 / 类（loadPlugin 时解析）
     private var idDnd = 0
@@ -404,7 +408,7 @@ class AppVolumeEntryHook : BaseHook() {
             }
             updateVisibility(controller, entry)
             // 侧边音量条真正显示时，按需自动展开多应用音量面板。
-            if (methodName == "showVolumePanelH") maybeAutoShow(entry)
+            if (methodName == "showVolumePanelH") maybeAutoShow(controller, entry)
         }.onFailure { HookHelper.log("$tag: onController failed", it) }
     }
 
@@ -606,46 +610,96 @@ class AppVolumeEntryHook : BaseHook() {
         if (lastVisible[entry] == visible) return
         lastVisible[entry] = visible
         if (visible) {
+            // 先让入口以完全透明参与布局，等父容器 / 窗口按新高度完成一次测量后再播出现动画：
+            // 官方音量条窗口的高度跟随内容，淡入期间窗口尚未长高时入口会被裁掉一截（表现为「截断」）。
             entry.visibility = View.VISIBLE
             entry.alpha = 0f
-            entry.animate().alpha(1f).setDuration(FADE_DURATION_MS).start()
+            (entry.parent as? View)?.requestLayout()
+            whenLaidOut(entry) { showEntry(entry) }
         } else {
+            // 新一轮显示周期：清除上一轮的用户手动操作标记。
+            userToggled.remove(entry)
+            // 整条音量条先平移回原位（此时入口仍在布局中，窗口高度未收缩），淡出结束后再收起入口，
+            // 避免淡出过程中窗口已经变矮、入口被裁掉一截。
+            shiftPanel(entry, false)
             entry.animate().alpha(0f).setDuration(FADE_DURATION_MS).withEndAction {
-                if (lastVisible[entry] == false) entry.visibility = View.GONE
+                if (lastVisible[entry] == false) {
+                    entry.visibility = View.GONE
+                    entry.alpha = 1f
+                    (entry.parent as? View)?.requestLayout()
+                }
             }.start()
         }
         HookHelper.log("$tag: entry visible=$visible")
     }
 
+    /** 入口完成一次测量后再执行 [action]（带上限，取不到尺寸时也会放行）。 */
+    private fun whenLaidOut(entry: View, frames: Int = 0, action: (View) -> Unit) {
+        if (entry.height > 0 || frames >= MAX_LAYOUT_WAIT_FRAMES || !entry.isAttachedToWindow) {
+            action(entry)
+            return
+        }
+        entry.post { whenLaidOut(entry, frames + 1, action) }
+    }
+
+    /** 播放入口出现动画；入口在本次显示周期内出现时同样按「自动显示」展开多应用音量面板。 */
+    private fun showEntry(entry: View) {
+        if (lastVisible[entry] != true) return
+        // 清掉上一次淡出挂的结束动作，避免复用时在本次动画结束时误收起入口。
+        entry.animate().alpha(1f).withEndAction(null).setDuration(FADE_DURATION_MS).start()
+        shiftPanel(entry, true)
+        if (!autoRefreshing) lastController?.let { maybeAutoShow(it, entry) }
+    }
+
     private fun updateVisibility(controller: Any, entry: View) {
         val expanded = runCatching { Reflect.getObjectField(controller, "mExpanded") }.getOrNull() as? Boolean ?: false
         val visible = !expanded &&
-            (HookPrefs.getBoolean(AppVolumeKeys.ALWAYS_SHOW, false) || hasActiveMedia(entry.context))
+            (HookPrefs.getBoolean(AppVolumeKeys.ALWAYS_SHOW, false) ||
+                AppVolumePlayback.hasActivePlayback(entry.context))
         applyEntryState(entry, visible, dodge = expanded)
-        shiftPanel(entry, visible)
     }
 
     /**
      * 「自动显示」：侧边音量条显示时，若开关开启且入口可见（有媒体 / 常显），自动展开面板。
-     * 入口按钮的点击开关逻辑不变；已展开时（含用户手动关闭后）不重复展开。
+     * 入口按钮的点击开关逻辑不变；已展开时、或用户本轮手动操作过入口后，不再自动展开。
      */
-    private fun maybeAutoShow(entry: View) {
-        if (!HookPrefs.getBoolean(AppVolumeKeys.AUTO_SHOW, false)) return
+    private fun maybeAutoShow(controller: Any, entry: View) {
+        if (!canAutoShow(entry)) return
         if (AppVolumePanel.isShowing()) return
-        if (lastVisible[entry] != true) return
         val root = entry.rootView as? ViewGroup ?: return
         val dialog = findVolumeDialog(entry) ?: return
-        // 延后到本轮布局之后，确保侧边音量条已就位再取坐标 / 展开。
-        entry.post {
-            if (!HookPrefs.getBoolean(AppVolumeKeys.AUTO_SHOW, false)) return@post
-            if (AppVolumePanel.isShowing() || lastVisible[entry] != true) return@post
-            runCatching { AppVolumePanel.show(root, dialog, entry.context, pluginClassLoader, entry) }
-                .onFailure { HookHelper.log("$tag: auto show panel failed", it) }
-        }
+        // 延后到本轮布局之后，确保侧边音量条已就位再取坐标 / 展开；再补一次延迟重试，
+        // 覆盖「官方的正在播放应用列表在音量条展开后才刷新出来」的情形。
+        entry.post { tryAutoShow(controller, entry, root, dialog) }
+        entry.postDelayed({ tryAutoShow(controller, entry, root, dialog) }, AUTO_SHOW_RETRY_MS)
     }
+
+    private fun tryAutoShow(controller: Any, entry: View, root: ViewGroup, dialog: View) {
+        if (!canAutoShow(entry)) return
+        if (AppVolumePanel.isShowing()) return
+        if (lastVisible[entry] != true) {
+            // 入口还没出现：按最新的「正在播放的应用」重算一次入口状态
+            // （应用可能刚刚才开始播放 / 官方列表刚刷新出来）。
+            autoRefreshing = true
+            try {
+                runCatching { updateVisibility(controller, entry) }
+            } finally {
+                autoRefreshing = false
+            }
+        }
+        if (lastVisible[entry] != true) return
+        runCatching { AppVolumePanel.show(root, dialog, entry.context, pluginClassLoader, entry) }
+            .onFailure { HookHelper.log("$tag: auto show panel failed", it) }
+    }
+
+    /** 是否允许自动展开面板：开关开启，且用户本轮显示期间没有手动操作过入口。 */
+    private fun canAutoShow(entry: View): Boolean =
+        HookPrefs.getBoolean(AppVolumeKeys.AUTO_SHOW, false) && userToggled[entry] != true
 
     private fun onEntryClick(entry: View) {
         HookHelper.log("$tag: entry clicked")
+        // 用户手动操作过入口（展开 / 关闭）后，本轮显示周期内不再自动展开。
+        userToggled[entry] = true
         // 仅系统界面模式：由系统界面自行渲染面板（数值转发到「音质音效」生效 / 同步）。
         val root = entry.rootView as? ViewGroup
         val dialog = findVolumeDialog(entry)
@@ -655,25 +709,7 @@ class AppVolumeEntryHook : BaseHook() {
         }
     }
 
-    // ---------------- 资源 / 媒体检测 ----------------
-
-    private fun hasActiveMedia(context: Context): Boolean {
-        val am = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager ?: return false
-        return runCatching {
-            am.activePlaybackConfigurations.any { config ->
-                val active = Reflect.callMethod(config, "isActive") as? Boolean ?: false
-                val playerState = runCatching { Reflect.callMethod(config, "getPlayerState") as? Int }.getOrNull()
-                val attrs = runCatching { Reflect.callMethod(config, "getAudioAttributes") }.getOrNull()
-                val usage = attrs?.let { runCatching { Reflect.callMethod(it, "getUsage") as? Int }.getOrNull() }
-                (active || playerState == PLAYER_STATE_STARTED) && usage != null && isMediaUsage(usage)
-            }
-        }.getOrDefault(false)
-    }
-
-    private fun isMediaUsage(usage: Int): Boolean =
-        usage == AudioAttributes.USAGE_MEDIA ||
-            usage == AudioAttributes.USAGE_ASSISTANCE_NAVIGATION_GUIDANCE ||
-            usage == AudioAttributes.USAGE_UNKNOWN
+    // ---------------- 资源 ----------------
 
     private fun loadModuleIcon(context: Context): android.graphics.drawable.Drawable? = runCatching {
         val module = context.createPackageContext(
@@ -722,14 +758,17 @@ class AppVolumeEntryHook : BaseHook() {
         private const val TAG_ENTRY = "tag_app_volume_entry_root"
         private const val TAG_DIVIDER = "tag_app_volume_entry_divider"
 
-        /** `AudioPlaybackConfiguration.PLAYER_STATE_STARTED`。 */
-        private const val PLAYER_STATE_STARTED = 2
-
         /** 面板上移 / 复位动画时长。 */
         private const val SHIFT_DURATION_MS = 250L
 
         /** 入口出现 / 消失的透明度动画时长。 */
         private const val FADE_DURATION_MS = 250L
+
+        /** 「自动显示」的延迟重试间隔：等官方的正在播放应用列表刷新后再判定一次。 */
+        private const val AUTO_SHOW_RETRY_MS = 300L
+
+        /** 入口出现动画前，等待其完成布局的最大帧数。 */
+        private const val MAX_LAYOUT_WAIT_FRAMES = 5
 
         private val CONTROLLER_METHODS =
             setOf("showH", "showVolumePanelH", "prepareShow", "updateExpandedH", "dismissH")

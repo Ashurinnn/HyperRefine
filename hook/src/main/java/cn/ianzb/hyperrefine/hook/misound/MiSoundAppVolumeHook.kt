@@ -1042,7 +1042,7 @@ class MiSoundAppVolumeHook : BaseHook() {
             val uid = runCatching { Reflect.callMethod(config, "getClientUid") as? Int }.getOrNull()
                 ?: return@mapNotNull null
             runCatching { pm.getNameForUid(uid) }.getOrNull()
-        }
+        }.distinct() // 官方按 uid 去重，同一应用只保留一条
     }
 
     private fun notifyPager(card: View) {
