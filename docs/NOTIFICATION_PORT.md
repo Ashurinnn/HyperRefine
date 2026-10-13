@@ -24,9 +24,9 @@ LSPosed 的对应作用域为 **系统界面** `com.android.systemui`、**系统
 
 ## 来源与许可证
 
-参考项目：[MonwF/customiuizer（Pengeek / 米客）](https://github.com/MonwF/customiuizer)，[GPL-3.0](https://github.com/MonwF/customiuizer/blob/dfd3a4de5201d058357c692250e35b1cb74edfb6/LICENSE)。仓库核对提交为 `dfd3a4de5201d058357c692250e35b1cb74edfb6`；行为核对输入为 `Pengeek-OS4-26.10.13-test.apk`。
+参考项目的来源、许可证及致谢统一维护在应用内「第三方许可证与致谢」页面，按模块开发工作流的要求集中登记。
 
-此实现独立编写，未复用参考项目的代码、资源或原生库。公开仓库提交与 OS4 测试 APK 的版本对应关系未确认；应用内参考项目分组已登记仓库来源和许可。项目自身继续沿用现有 AGPL-3.0。
+此实现独立编写，未复用参考项目的代码、资源或原生库。项目自身继续沿用现有 AGPL-3.0。
 
 ## 构建与自动验证
 
