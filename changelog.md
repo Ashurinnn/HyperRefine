@@ -4,6 +4,10 @@
 
 > 未发布
 
+### 新增
+
+- **通知**（目标 `com.android.systemui` / `com.android.settings` / `system`）：新增「系统界面 → 通知」页面及七项独立开关，分别控制锁屏保留、锁屏显示、悬浮资格、受保护通知修改、通知重要程度、历史折叠和每应用 10 条显示限制，默认均关闭。接入搜索、配置同步、作用域申请和安全模式；涉及系统框架的修改需完整重启。参考来源和验证说明见 [通知功能说明](docs/NOTIFICATION_PORT.md)。
+
 ### 修复
 
 - **多应用音量 · 正在播放的应用识别与官方不一致**（目标 `com.android.systemui`）：此前系统界面侧用自定的过滤条件判定「正在播放的应用」（只认 `USAGE_MEDIA` / `USAGE_ASSISTANCE_NAVIGATION_GUIDANCE`），因此部分应用——例如只调用 `AudioAttributes.setLegacyStreamType(STREAM_MUSIC)`、usage 并非 `MEDIA` 的播放器——在官方（音质音效）的多应用音量面板里能被识别，在本模块的面板里却识别不到（面板列表与入口显隐都受影响）。现已改为逐条对齐官方 `com.miui.misound.playervolume.f.a(Context)` 的实现：`uid ≥ 10000`、剔除常驻播放配置的 `com.miui.miwallpaper`、`getPlayerState() == PLAYER_STATE_STARTED`、`usage == USAGE_MEDIA` **或** `getVolumeControlStream() == STREAM_MUSIC`、按 uid 去重；面板列表与入口显隐共用同一套判定，「音质音效」侧的面板同样按 uid 去重。

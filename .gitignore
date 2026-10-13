@@ -1,5 +1,6 @@
 *.iml
 .gradle
+.kotlin/
 /local.properties
 /.idea/caches
 /.idea/libraries
@@ -15,4 +16,5 @@
 local.properties
 /.idea/
 /hook/build/
+/app/build/
 /release.keystore

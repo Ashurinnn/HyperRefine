@@ -153,6 +153,12 @@ private val licenseSections: List<LicenseSection> = listOf(
         titleRes = R.string.licenses_section_refs,
         libraries = listOf(
             LibraryInfo(
+                "Pengeek（米客）",
+                "OS4-26.10.13-test",
+                "GPL-3.0，仅通知功能思路参考（独立实现，未复用其代码或资源）",
+                "https://github.com/MonwF/customiuizer",
+            ),
+            LibraryInfo(
                 "HyperPasskey",
                 "-",
                 "GPL-3.0，通行密钥修复思路参考（未复用其代码）",

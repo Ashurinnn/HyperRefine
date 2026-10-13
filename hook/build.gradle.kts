@@ -22,4 +22,5 @@ dependencies {
     compileOnly(libs.libxposed.api)
     api(libs.libxposed.service)
     api(libs.dexkit)
+    testImplementation(libs.junit)
 }
