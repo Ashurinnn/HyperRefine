@@ -42,12 +42,12 @@ LSPosed 的对应作用域为 **系统界面** `com.android.systemui`、**系统
 
 贡献者反馈：基于 1.12.0 的 `1.12.0-notifications.1` 测试包整机测试效果正常。已安装包的 versionName/versionCode 经只读 ADB 确认为 `1.12.0-notifications.1` / `21`；未额外执行功能交互或逐项验收。
 
-| 环境项 | 只读 ADB 结果 |
+| 环境项 | 测试环境信息 |
 | --- | --- |
 | 产品名称 / 型号 | Xiaomi 18 Fold / 2608BPX34C |
 | Android / API | 17 / 37 |
 | HyperOS | OS4.0.22.0.XPNCNXM |
-| LSPosed 版本 | 普通包查询未返回管理器包，未获取到版本 |
+| LSPosed 版本 / API | 2.2.1-7912 / 102（贡献者提供） |
 
 此反馈与本地自动验证分别记录。PR 基于当前 master 的构建尚未获得新的真机测试反馈；上述结果不代表所有设备和 ROM 均已覆盖。
 
