@@ -44,6 +44,10 @@ class AssistantLoad : BaseLoad() {
                     AssistantOpenAnimHook(),
                     HookPrefs.getBoolean(AssistantKeys.OPEN_ANIM, false),
                 )
+                initHook(
+                    AssistantReturnFlightHook(),
+                    HookPrefs.getBoolean(AssistantKeys.RETURN_FLIGHT, false),
+                )
             }
         }
     }

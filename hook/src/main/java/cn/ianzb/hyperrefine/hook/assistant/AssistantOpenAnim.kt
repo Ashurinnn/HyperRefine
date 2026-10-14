@@ -1,6 +1,8 @@
 package cn.ianzb.hyperrefine.hook.assistant
 
 import android.app.ActivityOptions
+import android.graphics.Bitmap
+import android.graphics.Canvas
 import android.graphics.Rect
 import android.os.Bundle
 import android.os.SystemClock
@@ -50,6 +52,9 @@ internal object AssistantOpenAnim {
     private var makeScaleUp: Method? = null
 
     @Volatile
+    private var makeCapture: Method? = null
+
+    @Volatile
     private var sourceView: View? = null
 
     @Volatile
@@ -85,14 +90,38 @@ internal object AssistantOpenAnim {
                     method.name == "makeScaleUpAnim" &&
                         params.size == 5 && params[1] == Rect::class.java ->
                         makeScaleUp = method.also { it.isAccessible = true }
+
+                    method.name == "captureSnapshot" &&
+                        params.size == 1 && params[0] == View::class.java ->
+                        makeCapture = method.also { it.isAccessible = true }
                 }
             }
         }
         resolved = true
         HookHelper.log(
             "AssistantOpenAnim: helper resolved hyper=${makeHyperScale != null} " +
-                "rounded=${makeRounded != null} scaleUp=${makeScaleUp != null}"
+                "rounded=${makeRounded != null} scaleUp=${makeScaleUp != null} capture=${makeCapture != null}"
         )
+    }
+
+    /**
+     * 抓取视图快照（主线程）：优先小米 `captureSnapshot(View)`，失败退回 `View.draw`。
+     * 供「返回缩回动画」等需要部件快照的场景使用。
+     */
+    fun captureSnapshot(view: View): Bitmap? {
+        resolve()
+        val method = makeCapture
+        if (method != null) {
+            runCatching { method.invoke(null, view) as? Bitmap }.getOrNull()?.let { return it }
+        }
+        return runCatching {
+            val width = view.width
+            val height = view.height
+            if (width <= 0 || height <= 0) return@runCatching null
+            val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+            view.draw(Canvas(bitmap))
+            bitmap
+        }.getOrNull()
     }
 
     fun arm(view: View?, by: String) {

@@ -490,6 +490,7 @@ fun assistantSpecs(specs: List<OptionSpec>): List<OptionSpec> = listOf(
     specByKey(specs, AssistantKeys.FORCE_REVERSE_MERGE),
     specByKey(specs, AssistantKeys.MASK_BUFFER),
     specByKey(specs, AssistantKeys.OPEN_ANIM),
+    specByKey(specs, AssistantKeys.RETURN_FLIGHT),
     specByKey(specs, AssistantKeys.REMOTE_ANIM_PERMISSION),
 )
 
@@ -518,6 +519,13 @@ private fun assistantFeatureSpecs(): List<OptionSpec> = listOf(
         titleRes = R.string.assistant_open_anim,
         summaryRes = R.string.assistant_open_anim_summary,
         defaultBoolean = false, targetPackages = listOf(AssistantKeys.TARGET_PACKAGE), showStatus = true,
+    ),
+    OptionSpec(
+        key = AssistantKeys.RETURN_FLIGHT, type = OptionType.SWITCH,
+        titleRes = R.string.assistant_return_flight,
+        summaryRes = R.string.assistant_return_flight_summary,
+        defaultBoolean = false, targetPackages = listOf(AssistantKeys.TARGET_PACKAGE),
+        dependsOn = AssistantKeys.OPEN_ANIM, showStatus = true,
     ),
     OptionSpec(
         key = AssistantKeys.REMOTE_ANIM_PERMISSION, type = OptionType.SWITCH,

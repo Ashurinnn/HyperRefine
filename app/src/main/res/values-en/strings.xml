@@ -319,6 +319,8 @@
  <string name="assistant_mask_buffer_summary">Fix wrong content shown on the transition mask</string>
  <string name="assistant_open_anim">App open animation</string>
  <string name="assistant_open_anim_summary">Apps opened from the assistant scale up from the icon</string>
+ <string name="assistant_return_flight">Return shrink animation</string>
+ <string name="assistant_return_flight_summary">Shrink the widget snapshot back into place and fade it out near the end when closing back to the assistant</string>
  <string name="assistant_remote_anim_permission">Allow remote animations</string>
  <string name="assistant_remote_anim_permission_summary">Let the assistant use remote transitions in system_server, takes effect after a reboot</string>
 

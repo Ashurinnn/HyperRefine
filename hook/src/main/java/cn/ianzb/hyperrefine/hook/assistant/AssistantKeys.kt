@@ -28,6 +28,9 @@ object AssistantKeys {
     /** 打开应用动画：从微件 / 图标位置缩放展开。 */
     const val OPEN_ANIM = "assistant_open_anim"
 
+    /** 返回缩回动画：关闭应用回到负一屏时，部件快照缩回原位并在末段渐隐。 */
+    const val RETURN_FLIGHT = "assistant_return_flight"
+
     /** system_server 侧放行负一屏的远程动画权限。 */
     const val REMOTE_ANIM_PERMISSION = "assistant_remote_anim_permission"
 }

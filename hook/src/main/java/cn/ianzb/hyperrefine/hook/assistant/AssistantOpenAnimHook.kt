@@ -6,6 +6,7 @@ import android.os.Bundle
 import android.view.MotionEvent
 import android.view.View
 import cn.ianzb.hyperrefine.hook.base.BaseHook
+import cn.ianzb.hyperrefine.hook.prefs.HookPrefs
 import cn.ianzb.hyperrefine.hook.xposed.HookHelper
 import cn.ianzb.hyperrefine.hook.xposed.HookParam
 import cn.ianzb.hyperrefine.hook.xposed.Reflect
@@ -144,6 +145,11 @@ class AssistantOpenAnimHook : BaseHook() {
         if (!AssistantOpenAnim.isArmed()) return
         val context = param.thisObject as? Context ?: return
         val source = AssistantOpenAnim.consumeArmed() ?: return
+        // 「返回缩回动画」的素材：点击部件时抓取快照与位置，关闭应用回来时播放。
+        if (HookPrefs.getBoolean(AssistantKeys.RETURN_FLIGHT, false)) {
+            runCatching { AssistantReturnFlight.arm(source) }
+                .onFailure { HookHelper.log("$tag: arm return flight failed", it) }
+        }
         if (logCount.getAndIncrement() < 20) {
             HookHelper.log(
                 "$tag: intercept startActivity -> " +

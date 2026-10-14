@@ -47,6 +47,7 @@ class AssistantActivity : BaseSubPageActivity() {
             titleRes = R.string.assistant_section_open_anim,
             specs = listOf(
                 featureSpec(AssistantKeys.OPEN_ANIM),
+                featureSpec(AssistantKeys.RETURN_FLIGHT),
             ),
         )
         val serverSection = HookSection(
