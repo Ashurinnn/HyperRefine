@@ -11,6 +11,9 @@ import cn.ianzb.hyperrefine.hook.systemui.radius.CcRadiusHook
 import cn.ianzb.hyperrefine.hook.systemui.radius.CcRadiusKeys
 import cn.ianzb.hyperrefine.hook.systemui.wallpaper.WallpaperDarkDimHook
 import cn.ianzb.hyperrefine.hook.systemui.wallpaper.WallpaperDimKeys
+import cn.ianzb.hyperrefine.hook.systemui.statusbar.HideWifiActivityHook
+import cn.ianzb.hyperrefine.hook.systemui.statusbar.MobileIndicatorVisibilityHook
+import cn.ianzb.hyperrefine.hook.systemui.statusbar.StatusBarKeys
 
 /**
  * 系统界面（com.android.systemui）目标 Load：
@@ -23,6 +26,8 @@ class SystemUiLoad : BaseLoad() {
     override val targetPackages: List<String> = listOf(TARGET_PACKAGE)
 
     override fun onPackageLoaded(target: PackageTarget) {
+        initHook(HideWifiActivityHook(), HookPrefs.getBoolean(StatusBarKeys.WIFI_ACTIVITY))
+        initHook(MobileIndicatorVisibilityHook(), HookPrefs.getBoolean(StatusBarKeys.HIDE_TYPE))
         initHook(CcVolumePercentHook(), HookPrefs.getBoolean(CcVolumePercentHook.KEY, false))
         initHook(CcBrightnessPercentHook(), HookPrefs.getBoolean(CcBrightnessPercentHook.KEY, false))
         initHook(SideVolumePercentHook(), HookPrefs.getBoolean(SideVolumePercentHook.KEY, false))

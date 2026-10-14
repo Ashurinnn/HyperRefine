@@ -494,4 +494,9 @@
 
     <string name="licenses_section_passkey">Passkey</string>
     <string name="licenses_section_browser">Browser</string>
+    <string name="sb_title">Status bar</string>
+    <string name="sb_network_section">Network icons</string>
+    <string name="sb_wifi_hide_activity">Hide Wi-Fi activity indicators</string>
+    <string name="sb_mobile_type_section">Mobile network type</string>
+    <string name="sb_mobile_hide_type">Hide network type completely</string>
 </resources>

@@ -72,6 +72,7 @@ fun FeaturesPageView(
             HookSubPage(
                 titleRes = R.string.feature_system_ui,
                 specs = listOf(
+                    specByKey(specs, KEY_STATUS_BAR),
                     specByKey(specs, KEY_GLASS),
                     specByKey(specs, KEY_CC_RADIUS),
                     specByKey(specs, PercentLocation.entryKey(PercentLocation.CC_BRIGHTNESS)),
@@ -88,6 +89,11 @@ fun FeaturesPageView(
                 ),
                 onOpen = { context.startActivity(Intent(context, SystemUiActivity::class.java)) },
                 subPages = listOf(
+                    HookSubPage(
+                        titleRes = R.string.sb_title,
+                        specs = statusBarSpecs(specs),
+                        onOpen = { context.startActivity(Intent(context, NetworkIconsActivity::class.java)) },
+                    ),
                     HookSubPage(
                         titleRes = R.string.notifications_title,
                         specs = notificationSpecs(specs),
@@ -1223,6 +1229,7 @@ internal fun featureSpecs(): List<OptionSpec> {
         specs += buildAutoBalanceSpecs(systemUi)
     specs += ccRadiusSpecs(systemUi)
     specs += notificationFeatureSpecs()
+    specs += statusBarFeatureSpecs()
     return specs
 }
 

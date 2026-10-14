@@ -494,4 +494,9 @@
 
     <string name="licenses_section_passkey">通行密钥</string>
     <string name="licenses_section_browser">浏览器</string>
+    <string name="sb_title">状态栏</string>
+    <string name="sb_network_section">网络图标</string>
+    <string name="sb_wifi_hide_activity">隐藏 Wi-Fi 网络活动指示器</string>
+    <string name="sb_mobile_type_section">移动网络类型</string>
+    <string name="sb_mobile_hide_type">完全隐藏网络类型</string>
 </resources>

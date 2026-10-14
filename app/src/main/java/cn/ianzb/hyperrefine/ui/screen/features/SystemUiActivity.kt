@@ -39,6 +39,10 @@ class SystemUiActivity : BaseSubPageActivity() {
     ) {
         val context = LocalContext.current
         val scrollBehavior = LocalSubPageScrollBehavior.current
+        val statusBarSection = HookSection(
+            titleRes = R.string.sb_title,
+            specs = listOf(featureSpec(KEY_STATUS_BAR)),
+        )
         val controlCenterSection = HookSection(
             titleRes = R.string.feature_control_center,
             specs = listOf(
@@ -81,6 +85,7 @@ class SystemUiActivity : BaseSubPageActivity() {
 
         val openSubPage: (String) -> Unit = { key ->
             when (key) {
+                KEY_STATUS_BAR -> context.startActivity(Intent(context, NetworkIconsActivity::class.java))
                 KEY_GLASS ->
                     context.startActivity(Intent(context, GlassActivity::class.java))
                 KEY_CC_RADIUS ->
@@ -125,7 +130,7 @@ class SystemUiActivity : BaseSubPageActivity() {
                 ),
             contentPadding = contentPadding,
         ) {
-            listOf(controlCenterSection, volumeSection, lockAodSection, wallpaperSection, windowSection).forEach { section ->
+            listOf(statusBarSection, controlCenterSection, volumeSection, lockAodSection, wallpaperSection, windowSection).forEach { section ->
                 item {
                     HookSectionCard(section) {
                         section.specs.forEach { spec ->
