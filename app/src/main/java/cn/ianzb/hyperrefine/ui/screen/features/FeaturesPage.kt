@@ -9,6 +9,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import cn.ianzb.hyperrefine.R
+import cn.ianzb.hyperrefine.hook.assistant.AssistantKeys
 import cn.ianzb.hyperrefine.hook.browser.BrowserKeys
 import cn.ianzb.hyperrefine.hook.connect.ConnectKeys
 import cn.ianzb.hyperrefine.hook.connect.MirrorKeys
@@ -57,6 +58,7 @@ fun FeaturesPageView(
                     specByKey(specs, KEY_DEVICE_CONNECT),
                     specByKey(specs, KEY_SECURITY_CENTER),
                     specByKey(specs, KEY_VOICE_ASSIST),
+                    specByKey(specs, KEY_ASSISTANT),
                     specByKey(specs, KEY_PASSKEY),
                     specByKey(specs, KEY_BROWSER),
                     specByKey(specs, KEY_EXPERIMENTAL),
@@ -182,6 +184,11 @@ fun FeaturesPageView(
                 onOpen = { context.startActivity(Intent(context, VoiceAssistActivity::class.java)) },
             ),
             HookSubPage(
+                titleRes = R.string.feature_assistant,
+                specs = assistantSpecs(specs),
+                onOpen = { context.startActivity(Intent(context, AssistantActivity::class.java)) },
+            ),
+            HookSubPage(
                 titleRes = R.string.section_passkey,
                 specs = passkeySpecs(specs),
                 onOpen = { context.startActivity(Intent(context, PasskeyActivity::class.java)) },
@@ -224,6 +231,8 @@ fun FeaturesPageView(
                     context.startActivity(Intent(context, DeviceConnectActivity::class.java))
                 KEY_VOICE_ASSIST ->
                     context.startActivity(Intent(context, VoiceAssistActivity::class.java))
+                KEY_ASSISTANT ->
+                    context.startActivity(Intent(context, AssistantActivity::class.java))
                 KEY_PASSKEY ->
                     context.startActivity(Intent(context, PasskeyActivity::class.java))
                 KEY_BROWSER ->
@@ -242,6 +251,7 @@ fun FeaturesPageView(
                     "com.milink.service",
                     "com.xiaomi.mirror",
                     AppVolumeKeys.TARGET_PACKAGE,
+                    AssistantKeys.TARGET_PACKAGE,
                     *MiuixAppLoad.MIUIX_PACKAGES.toTypedArray(),
                     BrowserKeys.PKG_MISHARE,
                     BrowserKeys.PKG_AI_ENGINE,
@@ -287,6 +297,7 @@ const val KEY_WALLPAPER_DIM_AMOUNT = WallpaperDimKeys.AMOUNT
 const val KEY_CLIPBOARD_SYNC_BOOST = ConnectKeys.CLIPBOARD_SYNC_BOOST
 const val KEY_SR_ANIMATION_RADIUS = ScreenRecognitionRadiusHook.KEY
 const val KEY_VOICE_ASSIST = "feature_voice_assist"
+const val KEY_ASSISTANT = "feature_assistant"
 const val KEY_CC_RADIUS = "feature_cc_radius"
 const val KEY_FAST_CHARGE_ENTER = "security_center_fast_charge_enter_notify"
 const val KEY_FAST_CHARGE_EXIT = "security_center_fast_charge_exit_notify"
@@ -465,6 +476,35 @@ fun passkeySpecs(specs: List<OptionSpec>): List<OptionSpec> = listOf(
     specByKey(specs, PasskeyKeys.SETTINGS),
     specByKey(specs, PasskeyKeys.BLOCK_SECURITY_CENTER),
     specByKey(specs, PasskeyKeys.SCANNER),
+)
+
+/** 负一屏二级页内的配置项，用于功能页搜索直达。 */
+fun assistantSpecs(specs: List<OptionSpec>): List<OptionSpec> = listOf(
+    specByKey(specs, AssistantKeys.MASK_ALPHA_ZERO),
+    specByKey(specs, AssistantKeys.FORCE_REVERSE_MERGE),
+    specByKey(specs, AssistantKeys.REMOTE_ANIM_PERMISSION),
+)
+
+private fun assistantFeatureSpecs(): List<OptionSpec> = listOf(
+    OptionSpec(key = KEY_ASSISTANT, type = OptionType.ARROW, titleRes = R.string.feature_assistant),
+    OptionSpec(
+        key = AssistantKeys.MASK_ALPHA_ZERO, type = OptionType.SWITCH,
+        titleRes = R.string.assistant_mask_alpha_zero,
+        summaryRes = R.string.assistant_mask_alpha_zero_summary,
+        defaultBoolean = false, targetPackages = listOf(AssistantKeys.TARGET_PACKAGE), showStatus = true,
+    ),
+    OptionSpec(
+        key = AssistantKeys.FORCE_REVERSE_MERGE, type = OptionType.SWITCH,
+        titleRes = R.string.assistant_force_reverse_merge,
+        summaryRes = R.string.assistant_force_reverse_merge_summary,
+        defaultBoolean = false, targetPackages = listOf(AssistantKeys.TARGET_PACKAGE), showStatus = true,
+    ),
+    OptionSpec(
+        key = AssistantKeys.REMOTE_ANIM_PERMISSION, type = OptionType.SWITCH,
+        titleRes = R.string.assistant_remote_anim_permission,
+        summaryRes = R.string.assistant_remote_anim_permission_summary,
+        defaultBoolean = false, targetPackages = listOf(AssistantKeys.TARGET_PACKAGE), showStatus = true,
+    ),
 )
 
 /** 浏览器二级页内的配置项，用于功能页搜索直达。 */
@@ -1020,6 +1060,7 @@ internal fun featureSpecs(): List<OptionSpec> {
     )
     specs += passkeyFeatureSpecs(passkeyTargets)
     specs += browserFeatureSpecs(browserTargets)
+    specs += assistantFeatureSpecs()
     specs += OptionSpec(
         key = CcGlassKeys.MASTER,
         type = OptionType.SWITCH,

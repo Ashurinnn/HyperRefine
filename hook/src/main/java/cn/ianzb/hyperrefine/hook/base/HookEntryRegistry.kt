@@ -2,6 +2,7 @@ package cn.ianzb.hyperrefine.hook.base
 
 import cn.ianzb.hyperrefine.hook.connect.MiLinkLoad
 import cn.ianzb.hyperrefine.hook.connect.XiaomiMirrorLoad
+import cn.ianzb.hyperrefine.hook.assistant.AssistantLoad
 import cn.ianzb.hyperrefine.hook.browser.BrowserLoad
 import cn.ianzb.hyperrefine.hook.home.HomeLoad
 import cn.ianzb.hyperrefine.hook.misound.MiSoundLoad
@@ -23,6 +24,7 @@ object HookEntryRegistry {
     const val GLOBAL = "*"
 
     private val loads: List<BaseLoad> = listOf(
+        AssistantLoad(),
         HomeLoad(),
         SystemUiLoad(),
         SecurityCenterLoad(),

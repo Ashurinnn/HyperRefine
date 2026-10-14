@@ -201,6 +201,12 @@ private val licenseSections: List<LicenseSection> = listOf(
                 "https://github.com/KiminonawaResa/HyperLight",
             ),
             LibraryInfo(
+                "HyperAssistant",
+                "-",
+                "非开源，负一屏过渡动画思路参考（未复用其代码）",
+                "",
+            ),
+            LibraryInfo(
                 "HyperVolume",
                 "-",
                 "仅思路参考",

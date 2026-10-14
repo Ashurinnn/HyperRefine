@@ -4,6 +4,10 @@
 
 > 未发布
 
+### 新增
+
+- **负一屏 · 过渡动画优化**（目标 `com.miui.personalassistant` / system_server）：新增「负一屏」功能页，含三个独立开关。**过渡闪黑修复**：负一屏打开 / 返回时的 HyperViewScale 过渡会用一块全屏遮罩兜底，官方从起始 alpha 1.0 起播，快速连续切换时会先闪出一整块纯色（黑）；开启后把过渡遮罩的起始 alpha 钉成 0（`ViewScaleAnimInfo.maskAlphaFrom`），遮罩全程不可见，消除闪黑。**上滑合并强制反向**：负一屏上滑返回被系统并入既有过渡（transition type 1021）时，官方实现可能继续按打开方向播放，表现为返回动画先反向播一半再跳回；开启后在 `handleMergeAnimation` 上判定「type=1021 且处于打开场景」并举旗，再把 `reverseAnimationWhenMerge` 的 `reverseToStart` 置 true，交给系统按返回方向播放。**放行远程动画权限**（system_server，重启设备生效）：部分 ROM 的允许名单里没有负一屏，负一屏无法使用 `CONTROL_REMOTE_APP_TRANSITION_ANIMATIONS` 远程动画，过渡落回普通路径；开启后在 `ActivityTaskManagerService.checkPermission` 上对该权限 + 负一屏 uid 直接放行。入口：功能页 → 负一屏。以上功能思路参考 HyperAssistant（非开源，独立实现、未复用其代码；致谢见「关于 → 第三方许可证与致谢」）。
+
 ### 修复
 
 - **通话时系统界面 ANR（多应用音量探测阻塞主线程）**（目标 `com.android.systemui`）：官方「正在播放的应用」判定内部会同步调用音频服务——`AudioManager.getActivePlaybackConfigurations()`（AudioService）与 `AudioAttributes.getVolumeControlStream()`（音频策略服务 / audioserver）。通话时音频策略服务被占用，真机日志里单次 `getStreamTypeForAttributes` 阻塞 **8.6 秒**，而该判定此前跑在系统界面主线程上（入口显隐、「自动显示」重试都会触发），于是输入事件 5 秒超时 → 系统界面 ANR，通话界面也在等 system_server 处理音量键而连环 ANR。现在探测全部改到后台线程执行，主线程只读带缓存的快照（800ms 新鲜期、并发去重），快照过期时异步刷新并在结果回来后重算入口状态；多应用面板打开时若快照为空则先异步探测再决定是否展开；「让音量立即生效」的 `setPlayerVolume` 跨进程调用同样移出主线程。`com.miui.misound` 侧读取官方活跃播放列表也改为同样的后台快照。
