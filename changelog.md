@@ -12,6 +12,8 @@
 
 ### 修复
 
+- **多应用音量 · 共享 UID 应用的控制修复**（目标 `com.android.systemui` / `com.miui.misound`）：部分应用与同 UID 多包组合此前用 `getNameForUid` 映射包名，共享 UID 下会得到 `sharedUserId:appId` 之类的名称，导致面板列表、图标与音量写入目标错乱。现在播放身份按「UID + 真实包名 + 原生音量存储键」解析：同一 UID 只出一个条目，包名用 `getPackagesForUid` 解析（多包时优先播放进程所在的包、再选带启动入口的包）；两条写入路径——系统界面面板滑条与音质音效转发广播——统一走同一套策略并把音量写到该 UID 的全部活跃播放器，广播额外携带并校验 UID；相关探测与写入全部在后台线程执行，通话等场景不会阻塞界面。
+
 - **侧边音量条 · 多应用入口出现后整条发虚 / 渲染分辨率下降**（目标 `com.android.systemui`）：入口（多应用音量按钮）出现时会改变音量条窗口高度并触发整条内容的「自动平衡」平移；而官方的出现 / 收起形变动画会缩放整条内容并锁定几何参数——在动画播放期间改变窗口高度会打断其状态机，且非整数像素的整体平移会被 GPU 重采样（观感即整条发虚）。现在：官方形变动画播放期间延迟入口的显隐切换（动画结束后照常切换，最多等待约 4.8 秒），自动平衡的平移落点取整到物理像素，并移除显隐切换时多余的重复布局请求。
 - **通话时系统界面 ANR（多应用音量探测阻塞主线程）**（目标 `com.android.systemui`）：官方「正在播放的应用」判定内部会同步调用音频服务——`AudioManager.getActivePlaybackConfigurations()`（AudioService）与 `AudioAttributes.getVolumeControlStream()`（音频策略服务 / audioserver）。通话时音频策略服务被占用，真机日志里单次 `getStreamTypeForAttributes` 阻塞 **8.6 秒**，而该判定此前跑在系统界面主线程上（入口显隐、「自动显示」重试都会触发），于是输入事件 5 秒超时 → 系统界面 ANR，通话界面也在等 system_server 处理音量键而连环 ANR。现在探测全部改到后台线程执行，主线程只读带缓存的快照（800ms 新鲜期、并发去重），快照过期时异步刷新并在结果回来后重算入口状态；多应用面板打开时若快照为空则先异步探测再决定是否展开；「让音量立即生效」的 `setPlayerVolume` 跨进程调用同样移出主线程。`com.miui.misound` 侧读取官方活跃播放列表也改为同样的后台快照。
 - **多应用音量 · 正在播放的应用识别与官方不一致**（目标 `com.android.systemui`）：此前系统界面侧用自定的过滤条件判定「正在播放的应用」（只认 `USAGE_MEDIA` / `USAGE_ASSISTANCE_NAVIGATION_GUIDANCE`），因此部分应用——例如只调用 `AudioAttributes.setLegacyStreamType(STREAM_MUSIC)`、usage 并非 `MEDIA` 的播放器——在官方（音质音效）的多应用音量面板里能被识别，在本模块的面板里却识别不到（面板列表与入口显隐都受影响）。现已改为逐条对齐官方 `com.miui.misound.playervolume.f.a(Context)` 的实现：`uid ≥ 10000`、剔除常驻播放配置的 `com.miui.miwallpaper`、`getPlayerState() == PLAYER_STATE_STARTED`、`usage == USAGE_MEDIA` **或** `getVolumeControlStream() == STREAM_MUSIC`、按 uid 去重；面板列表与入口显隐共用同一套判定，「音质音效」侧的面板同样按 uid 去重。

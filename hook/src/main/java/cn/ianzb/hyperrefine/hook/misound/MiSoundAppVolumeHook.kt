@@ -21,6 +21,7 @@ import android.widget.TextView
 import cn.ianzb.hyperrefine.hook.base.BaseHook
 import cn.ianzb.hyperrefine.hook.prefs.HookPrefs
 import cn.ianzb.hyperrefine.hook.status.HookStatusReporter
+import cn.ianzb.hyperrefine.hook.systemui.AppVolumePlayback
 import cn.ianzb.hyperrefine.hook.systemui.radius.CcRadiusKeys
 import cn.ianzb.hyperrefine.hook.xposed.HookHelper
 import cn.ianzb.hyperrefine.hook.xposed.Reflect
@@ -44,6 +45,11 @@ class MiSoundAppVolumeHook : BaseHook() {
     private var controllerClass: Class<*>? = null
     private var appContext: Context? = null
     private var receiver: BroadcastReceiver? = null
+
+    /** 音量写入后台执行器：音频 / 包管理 IPC 在通话等场景可能阻塞数秒，不能占用主线程。 */
+    private val applyExecutor = java.util.concurrent.Executors.newSingleThreadExecutor { task ->
+        Thread(task, "HyperRefine-AppVolumeApply")
+    }
 
     /** 本次打开是否已播放进入动画。 */
     @Volatile
@@ -1043,7 +1049,7 @@ class MiSoundAppVolumeHook : BaseHook() {
     }
 
     /**
-     * 读取原生 `playervolume.f.a(Context)` 的活跃播放配置并映射为包名列表。
+     * 读取「正在播放的应用」包名列表（与系统界面使用同一套播放身份解析，兼容多包共享 UID）。
      *
      * 官方实现内部会同步调用音频服务（`getActivePlaybackConfigurations` / `getVolumeControlStream`），
      * 通话等场景单次可能阻塞数秒，因此这里只返回后台探测的快照，并在快照过期时触发一次后台刷新
@@ -1054,14 +1060,13 @@ class MiSoundAppVolumeHook : BaseHook() {
         return activeAppsSnapshot
     }
 
-    /** 后台线程执行官方探测并更新快照；同一时刻只跑一次。 */
+    /** 后台线程执行探测并更新快照；同一时刻只跑一次。 */
     private fun refreshActiveAppPackages(context: Context) {
         if (activeAppsRefreshing) return
         activeAppsRefreshing = true
         val appContext = context.applicationContext ?: context
-        val classLoader = target.classLoader
         Thread {
-            activeAppsSnapshot = runCatching { readActiveAppPackages(appContext, classLoader) }
+            activeAppsSnapshot = runCatching { AppVolumePlayback.activePackages(appContext) }
                 .getOrDefault(emptyList())
             activeAppsAt = SystemClock.uptimeMillis()
             activeAppsRefreshing = false
@@ -1069,20 +1074,6 @@ class MiSoundAppVolumeHook : BaseHook() {
             isDaemon = true
             name = "HyperRefine-AppVolumeCheck"
         }.start()
-    }
-
-    /** 真正执行官方探测（会阻塞，只能在后台线程调用）。 */
-    private fun readActiveAppPackages(context: Context, classLoader: ClassLoader?): List<String> {
-        val cls = Reflect.findClassIfExists(ACTIVE_APPS_CLASS, classLoader) ?: return emptyList()
-        val list = runCatching { Reflect.callStaticMethod(cls, "a", context) as? List<*> }.getOrNull()
-            ?: return emptyList()
-        val pm = context.packageManager
-        return list.mapNotNull { config ->
-            config ?: return@mapNotNull null
-            val uid = runCatching { Reflect.callMethod(config, "getClientUid") as? Int }.getOrNull()
-                ?: return@mapNotNull null
-            runCatching { pm.getNameForUid(uid) }.getOrNull()
-        }.distinct() // 官方按 uid 去重，同一应用只保留一条
     }
 
     private fun notifyPager(card: View) {
@@ -1282,9 +1273,10 @@ class MiSoundAppVolumeHook : BaseHook() {
                     AppVolumeKeys.ACTION_EXPAND -> expand()
                     AppVolumeKeys.ACTION_SET_VOLUME -> {
                         val pkg = intent.getStringExtra(AppVolumeKeys.EXTRA_PACKAGE) ?: return
+                        val uid = intent.getIntExtra(AppVolumeKeys.EXTRA_UID, -1)
                         val volume = intent.getFloatExtra(AppVolumeKeys.EXTRA_VOLUME, -1f)
-                        if (volume >= 0f) {
-                            applyForwardedVolume(c?.applicationContext ?: context, pkg, volume)
+                        if (volume.isFinite() && volume >= 0f) {
+                            applyForwardedVolume(c?.applicationContext ?: context, pkg, uid, volume)
                         }
                     }
                 }
@@ -1305,40 +1297,34 @@ class MiSoundAppVolumeHook : BaseHook() {
      * 「系统界面模式」转发落地：用官方同款机制（`AudioManager.setPlayerVolume`）生效，
      * 并把数值写回官方面板镜像（控制器 `w`），使「音质音效」面板数值与系统界面同步。
      */
-    private fun applyForwardedVolume(context: Context, pkg: String, volume: Float) {
-        val v = volume.coerceIn(0f, 1f)
+    private fun applyForwardedVolume(context: Context, pkg: String, uid: Int, volume: Float) {
+        // 广播在 Misound 主线程派发；音频 / 包管理 IPC 在通话等场景可能阻塞数秒，
+        // 探测与写入放到后台线程，仅镜像刷新（View 操作）回主线程执行。
+        val appContext = context.applicationContext ?: context
         runCatching {
-            val am = context.getSystemService(Context.AUDIO_SERVICE) as? android.media.AudioManager
-                ?: return@runCatching
-            val apc = activeConfigForPackage(context, pkg) ?: return@runCatching
-            val set = android.media.AudioManager::class.java.getMethod(
-                "setPlayerVolume",
-                android.media.AudioPlaybackConfiguration::class.java,
-                Float::class.javaPrimitiveType,
-            )
-            set.invoke(am, apc, v)
-            HookHelper.log("$tag: forwarded setPlayerVolume $pkg -> $v")
-        }.onFailure { HookHelper.log("$tag: forwarded setPlayerVolume failed", it) }
-
-        // 写回镜像 + 刷新面板（若控制器可达）。
-        val controller = controllerRef?.get() ?: resolveController(context)
-        if (controller != null) {
-            runCatching { Reflect.callMethod(controller, "w", pkg, v) }
-                .onFailure { HookHelper.log("$tag: mirror volume failed", it) }
-            runCatching { Reflect.callMethod(controller, "E") }
-        }
-    }
-
-    /** 找到目标包当前活跃的 [android.media.AudioPlaybackConfiguration]。 */
-    private fun activeConfigForPackage(context: Context, pkg: String): Any? {
-        val am = context.getSystemService(Context.AUDIO_SERVICE) as? android.media.AudioManager
-            ?: return null
-        val pm = context.packageManager
-        return am.activePlaybackConfigurations.firstOrNull { config ->
-            val uid = runCatching { Reflect.callMethod(config, "getClientUid") as? Int }.getOrNull()
-                ?: return@firstOrNull false
-            runCatching { pm.getPackagesForUid(uid)?.contains(pkg) }.getOrNull() == true
-        }
+            applyExecutor.execute {
+                val app = AppVolumePlayback.targetForPackage(appContext, pkg, uid) ?: run {
+                    HookHelper.log("$tag: invalid volume target $pkg uid=$uid")
+                    return@execute
+                }
+                val v = volume.coerceIn(0f, 1f)
+                val applied = AppVolumePlayback.applyVolume(appContext, app, v)
+                if (applied == 0) {
+                    HookHelper.log("$tag: no active player updated for $pkg uid=${app.uid}")
+                    return@execute
+                }
+                HookHelper.log("$tag: forwarded setPlayerVolume $pkg uid=${app.uid} players=$applied -> $v")
+                // 写回镜像 + 刷新面板（若控制器可达）。
+                android.os.Handler(android.os.Looper.getMainLooper()).post {
+                    val controller = controllerRef?.get() ?: resolveController(appContext)
+                    if (controller != null) {
+                        runCatching { Reflect.callMethod(controller, "w", app.volumeKey, v) }
+                            .onFailure { HookHelper.log("$tag: mirror volume failed", it) }
+                        runCatching { Reflect.callMethod(controller, "E") }
+                    }
+                }
+            }
+        }.onFailure { HookHelper.log("$tag: forward apply enqueue failed", it) }
     }
 
     companion object {
@@ -1350,9 +1336,6 @@ class MiSoundAppVolumeHook : BaseHook() {
 
         /** 媒体列（媒体音量列）；其 SeekBar 未绑定时需拦截进度更新以防崩溃。 */
         private const val MEDIA_COLUMN_CLASS = "com.miui.misound.playervolume.a\$j"
-
-        /** 原生「活跃播放列表」工具类（静态方法 `a(Context)`）。 */
-        private const val ACTIVE_APPS_CLASS = "com.miui.misound.playervolume.f"
 
         /** 面板打开后做全树关裁剪 / 归位的“稳定期”（ms）。 */
         private const val SETTLE_MS = 2500L

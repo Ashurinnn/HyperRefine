@@ -24,6 +24,7 @@ import cn.ianzb.hyperrefine.hook.prefs.HookPrefs
 import cn.ianzb.hyperrefine.hook.systemui.glass.CcGlassKeys
 import cn.ianzb.hyperrefine.hook.systemui.glass.OfficialExpandedMaterial
 import cn.ianzb.hyperrefine.hook.systemui.radius.CcRadiusKeys
+import cn.ianzb.hyperrefine.hook.volume.AppVolumeTarget
 import cn.ianzb.hyperrefine.hook.xposed.HookHelper
 import cn.ianzb.hyperrefine.hook.xposed.Reflect
 import java.lang.reflect.Proxy
@@ -204,9 +205,10 @@ object AppVolumePanel {
         hide()
         closing = false
         val density = context.resources.displayMetrics.density
-        // 正在播放的应用：与系统官方（音质音效 `playervolume.f.a`）完全同一套判定，读后台探测快照；
-        // 快照里没有应用时先请一次后台探测（主线程不等待音频 IPC，通话等场景该 IPC 会阻塞数秒）。
-        val apps = AppVolumePlayback.snapshot().packages
+        // 正在播放的应用：与系统官方（音质音效 `playervolume.f.a`）逐条对齐的判定（共享 UID 感知），
+        // 读后台探测快照；快照里没有应用时先请一次后台探测（主线程不等待音频 IPC，
+        // 通话等场景该 IPC 会阻塞数秒）。
+        val apps = AppVolumePlayback.snapshot().targets
         if (apps.isEmpty()) {
             if (attempt == 0) {
                 AppVolumePlayback.refresh(context, force = true) {
@@ -562,11 +564,11 @@ object AppVolumePanel {
     private fun buildBars(
         context: Context,
         density: Float,
-        apps: List<String>,
+        apps: List<AppVolumeTarget>,
         pluginClassLoader: ClassLoader,
         maxWidth: Int,
     ): View {
-        val streams = OfficialVolumeColumnFactory.allocateFakeStreams(apps)
+        val streams = OfficialVolumeColumnFactory.allocateFakeStreams(apps.map { it.uid.toString() })
         val row = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -580,9 +582,9 @@ object AppVolumePanel {
             VolumeBarKeys.DEFAULT_SPACING
         }
         val margin = (spacingDp.coerceIn(0f, 200f) * density).toInt()
-        apps.forEachIndexed { index, pkg ->
-            val percent = (currentVolume(context, pkg) * 100f).toInt().coerceIn(0, 100)
-            val column = buildOfficialColumn(context, density, pkg, percent, streams.getValue(pkg), pluginClassLoader)
+        apps.forEachIndexed { index, app ->
+            val percent = (currentVolume(context, app) * 100f).toInt().coerceIn(0, 100)
+            val column = buildOfficialColumn(context, density, app, percent, streams.getValue(app.uid.toString()), pluginClassLoader)
                 ?: return@forEachIndexed
             row.addView(
                 column,
@@ -618,7 +620,7 @@ object AppVolumePanel {
     private fun buildOfficialColumn(
         context: Context,
         density: Float,
-        pkg: String,
+        app: AppVolumeTarget,
         percent: Int,
         fakeStream: Int,
         pluginClassLoader: ClassLoader,
@@ -641,7 +643,7 @@ object AppVolumePanel {
             barRadiusPx = (radiusDp(CcRadiusKeys.APP_VOLUME_BAR) * density).toInt(),
             glass = HookPrefs.getBoolean(CcGlassKeys.MASTER, false),
             onPercent = { value -> PercentText.show(percentText, value, 100, PERCENT_PREF, null, null, PERCENT_HIGHLIGHT) },
-            onCommit = { value -> forward(context, pkg, value / 100f) },
+            onCommit = { value -> forward(context, app, value / 100f) },
         ) ?: return null
         officialColumns.add(official)
 
@@ -649,7 +651,10 @@ object AppVolumePanel {
         val inset = (OVERLAY_INSET_DP * density).toInt()
         val iconSize = (SLOT_SIZE_DP * density).toInt()
         val appIcon = ImageView(context).apply {
-            runCatching { setImageDrawable(pm.getApplicationIcon(pkg)) }
+            val icon = runCatching { pm.getApplicationIcon(app.packageName) }
+                .onFailure { HookHelper.log("$TAG: icon unavailable for ${app.packageName}", it) }
+                .getOrElse { pm.defaultActivityIcon }
+            setImageDrawable(icon)
             imageTintList = null
             scaleType = ImageView.ScaleType.CENTER_INSIDE
             isEnabled = false
@@ -751,32 +756,42 @@ object AppVolumePanel {
 
     // ---------------- 数据 ----------------
 
-    private fun currentVolume(context: Context, pkg: String): Float {
+    private fun currentVolume(context: Context, app: AppVolumeTarget): Float {
+        // 图标用真实包名；官方共享 UID 音量记录可能仍按 UID 名称存储，兼容两种键。
+        val keys = listOf(app.packageName, app.volumeKey).distinct()
         runCatching {
             context.contentResolver.query(Uri.parse(PROVIDER_URI), null, null, null, null)?.use { c ->
                 val pkgIdx = c.getColumnIndex("_package_name")
                 val volIdx = c.getColumnIndex("_volume")
+                if (pkgIdx < 0 || volIdx < 0) return@use
+                val volumes = mutableMapOf<String, Float>()
                 while (c.moveToNext()) {
-                    if (pkgIdx >= 0 && c.getString(pkgIdx) == pkg) {
-                        return (c.getFloat(volIdx) / 100f).coerceIn(0f, 1f)
+                    val key = c.getString(pkgIdx)
+                    if (key in keys) {
+                        val volume = c.getFloat(volIdx) / 100f
+                        if (volume.isFinite()) volumes.putIfAbsent(key, volume.coerceIn(0f, 1f))
                     }
                 }
+                keys.firstNotNullOfOrNull { volumes[it] }?.let { return it }
             }
         }
         val am = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
         return runCatching {
             val get = AudioManager::class.java.getMethod("getPlayerVolume", String::class.java)
-            ((get.invoke(am, pkg) as? Float) ?: 1f).coerceIn(0f, 1f)
+            val volume = (get.invoke(am, app.volumeKey) as? Float) ?: 1f
+            if (volume.isFinite()) volume.coerceIn(0f, 1f) else 1f
         }.getOrDefault(1f)
     }
 
-    private fun forward(context: Context, pkg: String, volume: Float) {
+    private fun forward(context: Context, app: AppVolumeTarget, volume: Float) {
+        if (!volume.isFinite()) return
         val v = volume.coerceIn(0f, 1f)
         runCatching {
             context.sendBroadcast(
                 Intent(AppVolumeKeys.ACTION_SET_VOLUME)
                     .setPackage(AppVolumeKeys.TARGET_PACKAGE)
-                    .putExtra(AppVolumeKeys.EXTRA_PACKAGE, pkg)
+                    .putExtra(AppVolumeKeys.EXTRA_PACKAGE, app.packageName)
+                    .putExtra(AppVolumeKeys.EXTRA_UID, app.uid)
                     .putExtra(AppVolumeKeys.EXTRA_VOLUME, v)
                     .addFlags(Intent.FLAG_RECEIVER_FOREGROUND),
             )
@@ -785,25 +800,8 @@ object AppVolumePanel {
         // 直接生效（`AudioManager.setPlayerVolume`）需要重新查找播放配置并跨进程调用音频服务，
         // 通话等场景可能阻塞数秒，放到后台线程执行，避免卡住系统界面主线程。
         val appContext = context.applicationContext ?: context
-        runCatching { applyExecutor.execute { applyPlayerVolume(appContext, pkg, v) } }
+        runCatching { applyExecutor.execute { AppVolumePlayback.applyVolume(appContext, app, v) } }
             .onFailure { HookHelper.log("$TAG: forward enqueue failed", it) }
-    }
-
-    /** 让指定应用的音量立即生效（后台线程）。 */
-    private fun applyPlayerVolume(context: Context, pkg: String, volume: Float) {
-        runCatching {
-            val am = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager ?: return@runCatching
-            val config = am.activePlaybackConfigurations.firstOrNull {
-                val uid = Reflect.callMethod(it, "getClientUid") as? Int ?: return@firstOrNull false
-                context.packageManager.getPackagesForUid(uid)?.contains(pkg) == true
-            } ?: return@runCatching
-            val set = AudioManager::class.java.getMethod(
-                "setPlayerVolume",
-                android.media.AudioPlaybackConfiguration::class.java,
-                Float::class.javaPrimitiveType,
-            )
-            set.invoke(am, config, volume)
-        }.onFailure { HookHelper.log("$TAG: apply player volume failed", it) }
     }
 
     private const val TOUCHABLE_INSETS_FRAME = 0
