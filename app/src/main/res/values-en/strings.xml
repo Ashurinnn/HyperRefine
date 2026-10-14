@@ -1,4 +1,21 @@
 <resources>
+    <string name="notifications_title">Notifications</string>
+    <string name="notification_keep">Keep notifications on the lock screen</string>
+    <string name="notification_keep_summary">Show notifications that have not been dismissed when locking again after unlocking</string>
+    <string name="notification_lockscreen">Allow lock screen notifications</string>
+    <string name="notification_lockscreen_summary">Override app and channel restrictions on lock screen notifications</string>
+    <string name="notification_float">Allow floating notifications</string>
+    <string name="notification_float_summary">Override app and channel restrictions on floating notifications</string>
+    <string name="notification_edit">Allow editing protected notifications</string>
+    <string name="notification_edit_summary">Allow disabling protected system notifications; reboot required</string>
+    <string name="notification_importance">Notification importance</string>
+    <string name="notification_importance_summary">Adjust importance in system channel settings and hide minimum importance status bar icons</string>
+    <string name="notification_fold">Disable history notification folding</string>
+    <string name="notification_fold_summary">Keep notifications visible in the notification shade</string>
+    <string name="notification_limit">Remove the 10 notifications per app limit</string>
+    <string name="notification_limit_summary">Allow more notifications from the same app in the notification shade</string>
+    <string name="notification_apply_title">Apply changes</string>
+    <string name="notification_apply_summary">Restart System UI after changing options. Notification importance also needs Settings restarted. Editing protected notifications requires Android Framework, Settings and System UI scopes, followed by a full reboot.</string>
     <string name="app_name">HyperRefine</string>
     <string name="tab_home">Home</string>
     <string name="tab_features">Features</string>

@@ -82,11 +82,17 @@ fun FeaturesPageView(
                     specByKey(specs, KEY_APP_VOLUME),
                     specByKey(specs, KEY_VOLUME_BAR_LAYOUT),
                     specByKey(specs, KEY_AOD),
+                    specByKey(specs, KEY_NOTIFICATIONS),
                     specByKey(specs, KEY_WALLPAPER),
                     specByKey(specs, KEY_WINDOW_MANAGER),
                 ),
                 onOpen = { context.startActivity(Intent(context, SystemUiActivity::class.java)) },
                 subPages = listOf(
+                    HookSubPage(
+                        titleRes = R.string.notifications_title,
+                        specs = notificationSpecs(specs),
+                        onOpen = { context.startActivity(Intent(context, NotificationsActivity::class.java)) },
+                    ),
                     HookSubPage(
                         titleRes = R.string.feature_glass,
                         specs = glassSpecs(specs),
@@ -1208,6 +1214,7 @@ internal fun featureSpecs(): List<OptionSpec> {
         specs += buildL2PosSpecs(systemUi)
         specs += buildAutoBalanceSpecs(systemUi)
     specs += ccRadiusSpecs(systemUi)
+    specs += notificationFeatureSpecs()
     return specs
 }
 

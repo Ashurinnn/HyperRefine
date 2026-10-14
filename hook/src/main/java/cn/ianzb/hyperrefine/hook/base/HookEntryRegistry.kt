@@ -7,6 +7,7 @@ import cn.ianzb.hyperrefine.hook.browser.BrowserLoad
 import cn.ianzb.hyperrefine.hook.home.HomeLoad
 import cn.ianzb.hyperrefine.hook.misound.MiSoundLoad
 import cn.ianzb.hyperrefine.hook.miuix.MiuixAppLoad
+import cn.ianzb.hyperrefine.hook.notification.NotificationLoad
 import cn.ianzb.hyperrefine.hook.passkey.PasskeyLoad
 import cn.ianzb.hyperrefine.hook.securitycenter.SecurityCenterLoad
 import cn.ianzb.hyperrefine.hook.systemui.SystemUiLoad
@@ -27,6 +28,7 @@ object HookEntryRegistry {
         AssistantLoad(),
         HomeLoad(),
         SystemUiLoad(),
+        NotificationLoad(),
         SecurityCenterLoad(),
         MiLinkLoad(),
         XiaomiMirrorLoad(),

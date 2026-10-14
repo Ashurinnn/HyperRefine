@@ -62,6 +62,7 @@ class SystemUiActivity : BaseSubPageActivity() {
             titleRes = R.string.section_lock_aod,
             specs = listOf(
                 featureSpec(KEY_AOD),
+                featureSpec(KEY_NOTIFICATIONS),
             ),
         )
         val wallpaperSection = HookSection(
@@ -100,6 +101,8 @@ class SystemUiActivity : BaseSubPageActivity() {
                     context.startActivity(Intent(context, VolumeBarLayoutActivity::class.java))
                 KEY_AOD ->
                     context.startActivity(Intent(context, AodActivity::class.java))
+                KEY_NOTIFICATIONS ->
+                    context.startActivity(Intent(context, NotificationsActivity::class.java))
                 KEY_WALLPAPER ->
                     context.startActivity(Intent(context, WallpaperActivity::class.java))
                 KEY_WINDOW_MANAGER ->
