@@ -46,6 +46,12 @@ class AppVolumeEntryHook : BaseHook() {
     /** 本轮侧边音量条显示期间，用户是否手动操作过入口（手动操作后不再自动展开面板）。 */
     private val userToggled = WeakHashMap<View, Boolean>()
 
+    /** 入口期望的显隐状态（延迟显隐时用于重放）。 */
+    private val desiredVisible = WeakHashMap<View, Boolean>()
+
+    /** 延迟显隐的等待中标记，避免重复排队。 */
+    private val pendingShow = WeakHashMap<View, Boolean>()
+
     /** 「自动显示」重试中由本流程刷新入口状态，避免入口变化再次触发自动展开（递归）。 */
     private var autoRefreshing = false
 
@@ -577,7 +583,9 @@ class AppVolumeEntryHook : BaseHook() {
         // 自动平衡：显示入口时上移「多出高度的一半」，保持整条音量条平均高度不变；
         // 关闭后不平移，高度 / 位置保持原样。
         val autoBalance = HookPrefs.getBoolean(balanceKey, true)
-        val target = if (visible && autoBalance) -extra / 2f else 0f
+        // 平移落点取整到物理像素：整条内容做非整数像素平移时会被 GPU 重采样，
+        // 观感即「整条渲染分辨率下降 / 发虚」，因此半高度为奇数时向上取整。
+        val target = if (visible && autoBalance) -((extra + 1) / 2).toFloat() else 0f
         // 平移**整个窗口内容**（`mVolumePanelView`：对话框 `MiuiVolumeDialogView` 的父容器）：
         // 它与音量条对话框、悬浮百分比（`miui_super_volume_*`）并列包含在同一父容器下，
         // 只有平移该父容器才能让二者一起移动，避免只移动对话框导致悬浮百分比错位。
@@ -601,20 +609,36 @@ class AppVolumeEntryHook : BaseHook() {
         return null
     }
 
-    private fun applyEntryState(entry: View, visible: Boolean, dodge: Boolean = false) {
+    private fun applyEntryState(entry: View, visible: Boolean, dodge: Boolean = false, deferCount: Int = 0) {
+        desiredVisible[entry] = visible
         // 入口隐藏（展开态 / 面板收起）时同步关闭系统界面模式的面板，避免残留。
         // `dodge=true`（侧边二级面板展开）时用「避让」消失动画，其余情况原地淡出。
         if (!visible) {
+            pendingShow[entry] = false
             runCatching { if (dodge) AppVolumePanel.hideByExpand() else AppVolumePanel.hide() }
         }
         if (lastVisible[entry] == visible) return
+        if (visible) {
+            // 官方出现 / 收起形变动画会缩放整条内容并锁定几何参数；此时改变窗口高度（入口显隐）
+            // 会打断动画状态机，可能让整条内容停留在异常渲染状态。等动画结束再做显隐切换。
+            if (panelAnimating(entry) && deferCount < MAX_DEFER_FRAMES) {
+                if (pendingShow[entry] != true) {
+                    pendingShow[entry] = true
+                    entry.postDelayed({
+                        pendingShow[entry] = false
+                        applyEntryState(entry, desiredVisible[entry] ?: true, deferCount = deferCount + 1)
+                    }, DEFER_WAIT_MS)
+                }
+                return
+            }
+            pendingShow[entry] = false
+        }
         lastVisible[entry] = visible
         if (visible) {
             // 先让入口以完全透明参与布局，等父容器 / 窗口按新高度完成一次测量后再播出现动画：
             // 官方音量条窗口的高度跟随内容，淡入期间窗口尚未长高时入口会被裁掉一截（表现为「截断」）。
             entry.visibility = View.VISIBLE
             entry.alpha = 0f
-            (entry.parent as? View)?.requestLayout()
             whenLaidOut(entry) { showEntry(entry) }
         } else {
             // 新一轮显示周期：清除上一轮的用户手动操作标记。
@@ -626,12 +650,19 @@ class AppVolumeEntryHook : BaseHook() {
                 if (lastVisible[entry] == false) {
                     entry.visibility = View.GONE
                     entry.alpha = 1f
-                    (entry.parent as? View)?.requestLayout()
                 }
             }.start()
         }
         HookHelper.log("$tag: entry visible=$visible")
     }
+
+    /** 官方出现 / 收起动画是否仍在播放（`MiuiVolumeDialogMotion.mShowHideAnimator.isRunning()`）。 */
+    private fun panelAnimating(entry: View): Boolean = runCatching {
+        val panel = findVolumeDialog(entry) ?: return false
+        val motion = Reflect.getObjectField(panel, "mMotion") ?: return false
+        val animator = Reflect.getObjectField(motion, "mShowHideAnimator") ?: return false
+        (Reflect.callMethod(animator, "isRunning") as? Boolean) ?: false
+    }.getOrDefault(false)
 
     /** 入口完成一次测量后再执行 [action]（带上限，取不到尺寸时也会放行）。 */
     private fun whenLaidOut(entry: View, frames: Int = 0, action: (View) -> Unit) {
@@ -772,6 +803,12 @@ class AppVolumeEntryHook : BaseHook() {
 
         /** 入口出现动画前，等待其完成布局的最大帧数。 */
         private const val MAX_LAYOUT_WAIT_FRAMES = 5
+
+        /** 官方形变动画播放期间，延迟入口显隐的轮询间隔。 */
+        private const val DEFER_WAIT_MS = 120L
+
+        /** 延迟入口显隐的最大轮询次数（约 4.8s，超时后照常切换）。 */
+        private const val MAX_DEFER_FRAMES = 40
 
         private val CONTROLLER_METHODS =
             setOf("showH", "showVolumePanelH", "prepareShow", "updateExpandedH", "dismissH")
