@@ -85,14 +85,25 @@ class AllowFloatingNotificationsHook : BaseHook() {
 
     override fun init() {
         val expanded = Reflect.findClass("com.android.systemui.statusbar.notification.ExpandedNotification", target.classLoader)
-        val method = NotificationMembers.method(expanded, "isEnableFloat", java.lang.Boolean.TYPE)
+        // 悬浮资格的直接裁决点：旧版本 ROM 为 ExpandedNotification#isEnableFloat()，
+        // 新版本把 float 标志挪进 extraNotification、由汇总方法 ExpandedNotification#canFloat() 裁决。
+        val flagMethods = listOf("isEnableFloat", "canFloat").flatMap { name ->
+            runCatching {
+                NotificationMembers.methods(expanded, name) {
+                    it.returnType == java.lang.Boolean.TYPE && it.parameterTypes.isEmpty()
+                }
+            }.getOrDefault(emptyList())
+        }
+        check(flagMethods.isNotEmpty()) {
+            "com.android.systemui.statusbar.notification.ExpandedNotification: no float flag method"
+        }
         val manager = Reflect.findClass("com.miui.systemui.notification.NotificationSettingsManager", target.classLoader)
         val settings = NotificationMembers.method(manager, "canFloat", java.lang.Boolean.TYPE,
             Context::class.java, String::class.java, String::class.java)
-        installNotificationHooks(listOf(
-            { HookHelper.hookReplace(method) { true } },
-            { HookHelper.hookReplace(settings) { true } },
-        ))
+        installNotificationHooks(
+            flagMethods.map { method -> { HookHelper.hookReplace(method) { true } } } +
+                listOf({ HookHelper.hookReplace(settings) { true } }),
+        )
     }
 }
 

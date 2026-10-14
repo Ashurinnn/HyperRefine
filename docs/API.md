@@ -628,11 +628,11 @@ object SafeModeReader {
 ```kotlin
 object HookStatusReporter {
     fun markInstalled(key: String)                            // BaseLoad 安装成功后自动调用
-    fun flush(sourcePackage: String, sourceProcess: String)   // onPackageReady 末尾自动调用
+    fun flush(sourcePackage: String, sourceProcess: String)   // 由 XposedEntry 在全部 Load 完成后调用
 }
 ```
 
-- `BaseLoad` 在每条 hook **安装成功后** `markInstalled(hook.key)`，并在 `onPackageReady` 末尾 `flush(...)`；无安装则自动跳过。
+- `BaseLoad` 在每条 hook **安装成功后** `markInstalled(hook.key)`；`XposedEntry` 在本包全部 Load 完成后统一 `flush(...)` 一次（每个进程一次广播，多 Load 不会互相顶掉）；无安装则自动跳过。
 - `flush` 通过 `ActivityThread.currentApplication()` 反射取目标进程 Application 作为发送上下文（不额外 hook `Application.attach`，减小失败面），把本进程已安装的键**合并为一次定向广播** `ACTION_HOOKS_ACTIVE` 发往 App。
 - Android 16+ 开启 `BroadcastOptions.setShareIdentityEnabled(true)`，使 App 侧可校验发送者 UID；协议常量见 `HookStatusContract`。
 

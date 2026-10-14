@@ -77,6 +77,8 @@ class NotificationImportanceSettingsHook : BaseHook() {
 class NotificationImportanceIconsHook : BaseHook() {
     override val key = NotificationKeys.IMPORTANCE
 
+    private val resolverWarned = java.util.concurrent.atomic.AtomicBoolean(false)
+
     override fun init() {
         val loader = target.classLoader
         val listener = Reflect.findClass("com.android.systemui.statusbar.notification.MiuiNotificationListener", loader)
@@ -107,9 +109,20 @@ class NotificationImportanceIconsHook : BaseHook() {
                 val itemKey = Reflect.getObjectField(item, "key") as? String ?: return@run
                 val notifications = cachedCollection ?: run {
                     val sysUiProvider = provider.get(instance.get(null)) ?: return@run
-                    val notificationListener = Reflect.callMethod(notificationProvider.get(sysUiProvider) ?: return@run, "get")
-                        ?: return@run
-                    collection.get(notificationListener)?.also { cachedCollection = it } ?: return@run
+                    val rawListener = notificationProvider.get(sysUiProvider) ?: return@run
+                    // 部分 ROM 该字段是 Provider 包装（再 get() 一层才是监听器），另一些直接就是监听器实例。
+                    val listenerInstance = if (listener.isInstance(rawListener)) {
+                        rawListener
+                    } else {
+                        runCatching { Reflect.callMethod(rawListener, "get") }.getOrNull()
+                    }
+                    if (listenerInstance == null || !listener.isInstance(listenerInstance)) {
+                        if (resolverWarned.compareAndSet(false, true)) {
+                            HookHelper.log("$tag: notification collection unavailable")
+                        }
+                        return@run
+                    }
+                    collection.get(listenerInstance)?.also { cachedCollection = it } ?: return@run
                 }
                 val notificationEntry = getEntry.invoke(notifications, itemKey) ?: return@run
                 val value = getImportance.invoke(ranking.get(notificationEntry)) as Int

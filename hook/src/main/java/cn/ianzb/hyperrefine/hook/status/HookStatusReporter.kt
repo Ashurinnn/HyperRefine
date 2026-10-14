@@ -14,8 +14,9 @@ import cn.ianzb.hyperrefine.hook.xposed.HookHelper
 /**
  * Hook 生效状态上报器（hook 进程侧）。
  *
- * 目标进程在完成一组 hook 注册后调用 [markInstalled] 记录已安装的配置键，并在
- * `onPackageReady` 结束时调用 [flush] 合并上报一次。
+ * 目标进程在每条 hook 安装成功后调用 [markInstalled] 记录已安装的配置键；
+ * [flush] 由 `XposedEntry` 在本包**全部 Load 完成后**调用一次，合并上报（每个进程一次广播，
+ * 作为一次进程启动证据；多 Load 各自 flush 时先到者会把后到者的键顶掉，故不能各自 flush）。
  *
  * 由于 libxposed 的 `onPackageReady` 早于 `Application` 创建（API 文档：「is ready to create
  * Application」），此时通常拿不到进程上下文。因此 [flush] 会挂载一次

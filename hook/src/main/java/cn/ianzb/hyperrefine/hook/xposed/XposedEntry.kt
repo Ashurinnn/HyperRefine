@@ -4,6 +4,7 @@ import cn.ianzb.hyperrefine.hook.base.HookEntryRegistry
 import cn.ianzb.hyperrefine.hook.base.PackageTarget
 import cn.ianzb.hyperrefine.hook.prefs.HookPrefs
 import cn.ianzb.hyperrefine.hook.safemode.SafeModeManager
+import cn.ianzb.hyperrefine.hook.status.HookStatusReporter
 import io.github.libxposed.api.XposedModule
 import io.github.libxposed.api.XposedModuleInterface.ModuleLoadedParam
 import io.github.libxposed.api.XposedModuleInterface.PackageReadyParam
@@ -35,6 +36,8 @@ class XposedEntry : XposedModule() {
             runCatching { load.onPackageReady(target) }
                 .onFailure { HookHelper.log("load failed for ${target.packageName}", it) }
         }
+        // 全部 Load 完成后统一上报生效状态（每个进程一次广播；多 Load 不会互相顶掉）。
+        HookStatusReporter.flush(target.packageName, target.processName)
     }
 
     override fun onSystemServerStarting(param: SystemServerStartingParam) {
@@ -49,5 +52,7 @@ class XposedEntry : XposedModule() {
             runCatching { load.onPackageReady(target) }
                 .onFailure { HookHelper.log("system-server load failed: ${load.javaClass.simpleName}", it) }
         }
+        // 全部 Load 完成后统一上报生效状态（每个进程一次广播；多 Load 不会互相顶掉）。
+        HookStatusReporter.flush(target.packageName, target.processName)
     }
 }
