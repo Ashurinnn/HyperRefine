@@ -39,13 +39,16 @@ object AppVolumeKeys {
     const val ACTION_EXPAND = "cn.ianzb.hyperrefine.action.EXPAND_APP_VOLUME"
 
     /**
-     * 系统界面模式：系统界面把「包名 + 音量」转发到 MiSound 进程的广播。
+     * 系统界面模式：系统界面把「UID + 真实包名 + 音量」转发到 MiSound 进程的广播。
      * MiSound 侧接收后用官方同款机制生效（`AudioManager.setPlayerVolume`）并同步其面板数值。
      */
     const val ACTION_SET_VOLUME = "cn.ianzb.hyperrefine.action.SET_APP_VOLUME"
 
     /** [ACTION_SET_VOLUME]：目标应用包名。 */
     const val EXTRA_PACKAGE = "hyperrefine_app_volume_package"
+
+    /** [ACTION_SET_VOLUME]：播放身份 UID（兼容多包共享 UID）。 */
+    const val EXTRA_UID = "hyperrefine_app_volume_uid"
 
     /** [ACTION_SET_VOLUME]：目标音量（0f..1f）。 */
     const val EXTRA_VOLUME = "hyperrefine_app_volume_value"
