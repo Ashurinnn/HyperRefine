@@ -1,5 +1,6 @@
 <resources>
     <string name="notifications_title">通知</string>
+    <string name="notification_section">通知控制</string>
     <string name="notification_keep">通知留在锁屏</string>
     <string name="notification_keep_summary">解锁后再次锁屏时，仍显示尚未清除的通知</string>
     <string name="notification_lockscreen">强制允许锁屏通知</string>
@@ -14,8 +15,6 @@
     <string name="notification_fold_summary">保持通知在通知栏中正常显示</string>
     <string name="notification_limit">取消每应用 10 条通知限制</string>
     <string name="notification_limit_summary">允许同一应用在通知栏中显示更多通知</string>
-    <string name="notification_apply_title">应用更改</string>
-    <string name="notification_apply_summary">修改后重启系统界面；通知重要程度还需重启系统设置。解除通知修改限制需授权系统框架、系统设置和系统界面，并完整重启设备。</string>
     <string name="app_name">HyperRefine</string>
     <string name="tab_home">主页</string>
     <string name="tab_features">功能</string>
