@@ -30,19 +30,24 @@ class AssistantMaskAlphaHook : BaseHook() {
     private fun install(loader: ClassLoader?): Boolean {
         val clazz = AssistantHvsSupport.findClass(VIEW_SCALE_ANIM_INFO, loader) ?: return false
         val field = runCatching { Reflect.findField(clazz, "maskAlphaFrom") }.getOrNull() ?: return false
-        HookHelper.hookAllConstructors(clazz) { param ->
-            val self = param.thisObject ?: return@hookAllConstructors
-            val ok = runCatching {
-                field.setFloat(self, 0f)
-                true
-            }.getOrDefault(false)
-            if (ok) {
-                if (logCount.getAndIncrement() == 0) {
-                    HookHelper.log("$tag: maskAlphaFrom -> 0.0 @ ${clazz.name}")
+        // 必须在构造器「执行后」写：字段由构造器赋值，before 写入会被覆盖。
+        clazz.declaredConstructors.forEach { ctor ->
+            runCatching {
+                HookHelper.hookAfter(ctor) { param ->
+                    val self = param.thisObject ?: return@hookAfter
+                    val ok = runCatching {
+                        field.setFloat(self, 0f)
+                        true
+                    }.getOrDefault(false)
+                    if (ok) {
+                        if (logCount.getAndIncrement() == 0) {
+                            HookHelper.log("$tag: maskAlphaFrom -> 0.0 @ ${clazz.name}")
+                        }
+                    } else if (warnCount.getAndIncrement() == 0) {
+                        HookHelper.log("$tag: write maskAlphaFrom failed（字段可能为 final）")
+                    }
                 }
-            } else if (warnCount.getAndIncrement() == 0) {
-                HookHelper.log("$tag: write maskAlphaFrom failed（字段可能为 final）")
-            }
+            }.onFailure { HookHelper.log("$tag: hook ctor failed", it) }
         }
         return true
     }

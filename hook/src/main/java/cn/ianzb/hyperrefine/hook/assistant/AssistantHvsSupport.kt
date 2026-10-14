@@ -21,13 +21,24 @@ internal object AssistantHvsSupport {
     @Volatile
     private var implLoader: ClassLoader? = null
 
+    @Volatile
+    private var stubInstance: Any? = null
+
+    /** `HyperViewScaleRemoteStub.getInstance()` 的实现实例；尚未绑定时返回 null（下次再试）。 */
+    fun implInstance(appLoader: ClassLoader?): Any? {
+        stubInstance?.let { return it }
+        val resolved = runCatching {
+            val stub = Reflect.findClassIfExists(STUB, appLoader) ?: return@runCatching null
+            Reflect.callStaticMethod(stub, "getInstance")
+        }.getOrNull()
+        if (resolved != null) stubInstance = resolved
+        return resolved
+    }
+
     /** 解析 HyperViewScale 实现所在的 ClassLoader；尚未绑定时返回 null（下次再试）。 */
     private fun implLoader(appLoader: ClassLoader?): ClassLoader? {
         implLoader?.let { return it }
-        val resolved = runCatching {
-            val stub = Reflect.findClassIfExists(STUB, appLoader) ?: return@runCatching null
-            Reflect.callStaticMethod(stub, "getInstance")?.javaClass?.classLoader
-        }.getOrNull()
+        val resolved = implInstance(appLoader)?.javaClass?.classLoader
         if (resolved != null) implLoader = resolved
         return resolved
     }
@@ -40,6 +51,13 @@ internal object AssistantHvsSupport {
         }
         return appLoader?.let { Reflect.findClassIfExists(name, it) }
     }
+
+    /**
+     * 解析 HyperViewScale「管理器」实现类（`setMaskSurface` 等方法的宿主）。
+     * 优先使用 Stub 实例的真实类；未绑定时退回按名字解析。
+     */
+    fun implClass(appLoader: ClassLoader?): Class<*>? =
+        implInstance(appLoader)?.javaClass ?: findClass(HVS_REMOTE_MANAGER, appLoader)
 
     /**
      * 立即执行一次 [install]；未成功（目标类尚未就绪等）则在主线程按节奏重试，
@@ -66,4 +84,5 @@ internal object AssistantHvsSupport {
     }
 
     private const val STUB = "android.app.hyperviewscale.HyperViewScaleRemoteStub"
+    private const val HVS_REMOTE_MANAGER = "android.app.hyperviewscale.HyperViewScaleRemoteManager"
 }

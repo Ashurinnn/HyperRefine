@@ -22,6 +22,12 @@ object AssistantKeys {
     /** 上滑返回的合并动画强制反向。 */
     const val FORCE_REVERSE_MERGE = "assistant_force_reverse_merge"
 
+    /** 过渡遮罩重绘：把掩码 surface 的内容重画成源视图快照。 */
+    const val MASK_BUFFER = "assistant_mask_buffer"
+
+    /** 打开应用动画：从微件 / 图标位置缩放展开。 */
+    const val OPEN_ANIM = "assistant_open_anim"
+
     /** system_server 侧放行负一屏的远程动画权限。 */
     const val REMOTE_ANIM_PERMISSION = "assistant_remote_anim_permission"
 }

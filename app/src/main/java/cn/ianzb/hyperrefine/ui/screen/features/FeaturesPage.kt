@@ -482,6 +482,8 @@ fun passkeySpecs(specs: List<OptionSpec>): List<OptionSpec> = listOf(
 fun assistantSpecs(specs: List<OptionSpec>): List<OptionSpec> = listOf(
     specByKey(specs, AssistantKeys.MASK_ALPHA_ZERO),
     specByKey(specs, AssistantKeys.FORCE_REVERSE_MERGE),
+    specByKey(specs, AssistantKeys.MASK_BUFFER),
+    specByKey(specs, AssistantKeys.OPEN_ANIM),
     specByKey(specs, AssistantKeys.REMOTE_ANIM_PERMISSION),
 )
 
@@ -497,6 +499,18 @@ private fun assistantFeatureSpecs(): List<OptionSpec> = listOf(
         key = AssistantKeys.FORCE_REVERSE_MERGE, type = OptionType.SWITCH,
         titleRes = R.string.assistant_force_reverse_merge,
         summaryRes = R.string.assistant_force_reverse_merge_summary,
+        defaultBoolean = false, targetPackages = listOf(AssistantKeys.TARGET_PACKAGE), showStatus = true,
+    ),
+    OptionSpec(
+        key = AssistantKeys.MASK_BUFFER, type = OptionType.SWITCH,
+        titleRes = R.string.assistant_mask_buffer,
+        summaryRes = R.string.assistant_mask_buffer_summary,
+        defaultBoolean = false, targetPackages = listOf(AssistantKeys.TARGET_PACKAGE), showStatus = true,
+    ),
+    OptionSpec(
+        key = AssistantKeys.OPEN_ANIM, type = OptionType.SWITCH,
+        titleRes = R.string.assistant_open_anim,
+        summaryRes = R.string.assistant_open_anim_summary,
         defaultBoolean = false, targetPackages = listOf(AssistantKeys.TARGET_PACKAGE), showStatus = true,
     ),
     OptionSpec(

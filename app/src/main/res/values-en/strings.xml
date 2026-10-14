@@ -297,6 +297,11 @@
  <string name="assistant_mask_alpha_zero_summary">Opening and returning no longer flash black</string>
  <string name="assistant_force_reverse_merge">Force reverse when merged</string>
  <string name="assistant_force_reverse_merge_summary">Return animations merged by the system play in the return direction</string>
+ <string name="assistant_section_open_anim">Open animation</string>
+ <string name="assistant_mask_buffer">Redraw transition mask</string>
+ <string name="assistant_mask_buffer_summary">Fix wrong content shown on the transition mask</string>
+ <string name="assistant_open_anim">App open animation</string>
+ <string name="assistant_open_anim_summary">Apps opened from the assistant scale up from the icon</string>
  <string name="assistant_remote_anim_permission">Allow remote animations</string>
  <string name="assistant_remote_anim_permission_summary">Let the assistant use remote transitions in system_server, takes effect after a reboot</string>
 

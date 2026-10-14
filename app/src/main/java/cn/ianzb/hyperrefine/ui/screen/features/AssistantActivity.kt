@@ -18,7 +18,8 @@ import cn.ianzb.hyperrefine.ui.util.pageScrollModifiers
 /**
  * 「负一屏」（`com.miui.personalassistant`）二级页。
  *
- * - 过渡动画：闪黑修复（遮罩起始 alpha 归零）、上滑合并强制反向；
+ * - 过渡动画：闪黑修复（遮罩起始 alpha 归零）、上滑合并强制反向、过渡遮罩重绘；
+ * - 打开动画：点按微件 / 图标打开应用时从图标位置缩放展开；
  * - 系统服务：放行远程动画权限（需重启设备生效）。
  */
 class AssistantActivity : BaseSubPageActivity() {
@@ -39,6 +40,13 @@ class AssistantActivity : BaseSubPageActivity() {
             specs = listOf(
                 featureSpec(AssistantKeys.MASK_ALPHA_ZERO),
                 featureSpec(AssistantKeys.FORCE_REVERSE_MERGE),
+                featureSpec(AssistantKeys.MASK_BUFFER),
+            ),
+        )
+        val openSection = HookSection(
+            titleRes = R.string.assistant_section_open_anim,
+            specs = listOf(
+                featureSpec(AssistantKeys.OPEN_ANIM),
             ),
         )
         val serverSection = HookSection(
@@ -62,7 +70,7 @@ class AssistantActivity : BaseSubPageActivity() {
                 ),
             contentPadding = contentPadding,
         ) {
-            listOf(animSection, serverSection).forEach { section ->
+            listOf(animSection, openSection, serverSection).forEach { section ->
                 item {
                     HookSectionCard(section) {
                         section.specs.forEach { HookOptionView(it) }

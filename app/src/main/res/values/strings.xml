@@ -297,6 +297,11 @@
  <string name="assistant_mask_alpha_zero_summary">负一屏打开与返回时不再闪黑</string>
  <string name="assistant_force_reverse_merge">上滑合并强制反向</string>
  <string name="assistant_force_reverse_merge_summary">返回动画被系统合并时按返回方向播放</string>
+ <string name="assistant_section_open_anim">打开动画</string>
+ <string name="assistant_mask_buffer">过渡遮罩重绘</string>
+ <string name="assistant_mask_buffer_summary">修复过渡中遮罩显示异常内容</string>
+ <string name="assistant_open_anim">应用打开动画</string>
+ <string name="assistant_open_anim_summary">负一屏点开应用时从图标位置缩放展开</string>
  <string name="assistant_remote_anim_permission">放行远程动画权限</string>
  <string name="assistant_remote_anim_permission_summary">系统服务侧放行负一屏的远程动画，重启后生效</string>
 
