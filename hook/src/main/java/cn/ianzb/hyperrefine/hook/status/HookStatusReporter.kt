@@ -7,6 +7,8 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import cn.ianzb.hyperrefine.hook.xposed.HookHelper
 
 /**
@@ -32,6 +34,9 @@ object HookStatusReporter {
     @Volatile
     private var attachHookInstalled = false
 
+    @Volatile
+    private var deferredRetryScheduled = false
+
     /** 记录一个已成功安装的配置键。 */
     @Synchronized
     fun markInstalled(key: String) {
@@ -45,11 +50,12 @@ object HookStatusReporter {
     fun flush(sourcePackage: String, sourceProcess: String) {
         pendingSource = sourcePackage to sourceProcess
         if (installedKeys.isEmpty()) return
-        val context = currentApplication()
+        val context = currentApplication() ?: systemContext()
         if (context != null) {
             reportIfPending(context)
         } else {
             ensureAttachHook()
+            scheduleDeferredRetry()
         }
     }
 
@@ -129,9 +135,45 @@ object HookStatusReporter {
             .invoke(null) as? Context
     }.getOrNull()
 
+    /**
+     * system_server 等没有 Application 的进程：退回系统上下文上报。
+     * `flush` 调用时机可能早于系统上下文创建，拿不到时由 [scheduleDeferredRetry] 稍后补发。
+     */
+    @SuppressLint("PrivateApi", "DiscouragedPrivateApi")
+    private fun systemContext(): Context? = runCatching {
+        val thread = Class.forName("android.app.ActivityThread")
+            .getMethod("currentActivityThread")
+            .invoke(null) ?: return@runCatching null
+        var current: Class<*>? = thread.javaClass
+        while (current != null) {
+            val method = runCatching { current.getDeclaredMethod("getSystemContext") }.getOrNull()
+            if (method != null) {
+                method.isAccessible = true
+                return@runCatching method.invoke(thread) as? Context
+            }
+            current = current.superclass
+        }
+        null
+    }.getOrNull()
+
+    /** 延迟补发一次（系统上下文通常会在 system_server 启动稍后创建）。 */
+    @Synchronized
+    private fun scheduleDeferredRetry() {
+        if (deferredRetryScheduled) return
+        deferredRetryScheduled = true
+        runCatching {
+            Handler(Looper.getMainLooper()).postDelayed({
+                val context = currentApplication() ?: systemContext() ?: return@postDelayed
+                reportIfPending(context)
+            }, DEFERRED_RETRY_MS)
+        }.onFailure { HookHelper.log("hook status: deferred retry unavailable", it) }
+    }
+
     private fun moduleVersionCode(context: Context): Long = runCatching {
         context.packageManager
             .getPackageInfo(HookStatusContract.MODULE_PACKAGE, 0)
             .longVersionCode
     }.getOrDefault(0L)
+
+    private const val DEFERRED_RETRY_MS = 5_000L
 }
