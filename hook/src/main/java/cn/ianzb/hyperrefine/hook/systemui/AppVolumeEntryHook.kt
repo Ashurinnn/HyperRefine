@@ -653,10 +653,13 @@ class AppVolumeEntryHook : BaseHook() {
 
     private fun updateVisibility(controller: Any, entry: View) {
         val expanded = runCatching { Reflect.getObjectField(controller, "mExpanded") }.getOrNull() as? Boolean ?: false
+        // 读后台探测快照：官方判定内部会同步调用音频服务，通话等场景单次可阻塞数秒，主线程不能直接调。
         val visible = !expanded &&
             (HookPrefs.getBoolean(AppVolumeKeys.ALWAYS_SHOW, false) ||
-                AppVolumePlayback.hasActivePlayback(entry.context))
+                AppVolumePlayback.snapshot().hasActive)
         applyEntryState(entry, visible, dodge = expanded)
+        // 快照过期时请一次后台刷新；结果回来（播放状态可能已变化）再重算一次入口状态。
+        AppVolumePlayback.refresh(entry.context) { lastController?.let { updateVisibility(it, entry) } }
     }
 
     /**

@@ -75,6 +75,17 @@ class MiSoundAppVolumeHook : BaseHook() {
     @Volatile
     private var lastMediaVolume = -1
 
+    /** 「正在播放的应用」快照（官方探测结果，主线程只读）。 */
+    @Volatile
+    private var activeAppsSnapshot: List<String> = emptyList()
+
+    /** 快照时间戳 / 后台探测进行中标记。 */
+    @Volatile
+    private var activeAppsAt = 0L
+
+    @Volatile
+    private var activeAppsRefreshing = false
+
     /** 每张卡片的打开时间戳，用于界定“稳定期”（其间才做全树关裁剪 / 归位）。 */
     private val openStartedAt = java.util.WeakHashMap<View, Long>()
 
@@ -1031,9 +1042,38 @@ class MiSoundAppVolumeHook : BaseHook() {
         }
     }
 
-    /** 读取原生 `playervolume.f.a(Context)` 的活跃播放配置并映射为包名列表。 */
+    /**
+     * 读取原生 `playervolume.f.a(Context)` 的活跃播放配置并映射为包名列表。
+     *
+     * 官方实现内部会同步调用音频服务（`getActivePlaybackConfigurations` / `getVolumeControlStream`），
+     * 通话等场景单次可能阻塞数秒，因此这里只返回后台探测的快照，并在快照过期时触发一次后台刷新
+     * （该方法可安全地在主线程调用）。
+     */
     private fun activeAppPackages(context: Context): List<String> {
-        val cls = Reflect.findClassIfExists(ACTIVE_APPS_CLASS, target.classLoader) ?: return emptyList()
+        if (SystemClock.uptimeMillis() - activeAppsAt > ACTIVE_APPS_FRESH_MS) refreshActiveAppPackages(context)
+        return activeAppsSnapshot
+    }
+
+    /** 后台线程执行官方探测并更新快照；同一时刻只跑一次。 */
+    private fun refreshActiveAppPackages(context: Context) {
+        if (activeAppsRefreshing) return
+        activeAppsRefreshing = true
+        val appContext = context.applicationContext ?: context
+        val classLoader = target.classLoader
+        Thread {
+            activeAppsSnapshot = runCatching { readActiveAppPackages(appContext, classLoader) }
+                .getOrDefault(emptyList())
+            activeAppsAt = SystemClock.uptimeMillis()
+            activeAppsRefreshing = false
+        }.apply {
+            isDaemon = true
+            name = "HyperRefine-AppVolumeCheck"
+        }.start()
+    }
+
+    /** 真正执行官方探测（会阻塞，只能在后台线程调用）。 */
+    private fun readActiveAppPackages(context: Context, classLoader: ClassLoader?): List<String> {
+        val cls = Reflect.findClassIfExists(ACTIVE_APPS_CLASS, classLoader) ?: return emptyList()
         val list = runCatching { Reflect.callStaticMethod(cls, "a", context) as? List<*> }.getOrNull()
             ?: return emptyList()
         val pm = context.packageManager
@@ -1322,6 +1362,9 @@ class MiSoundAppVolumeHook : BaseHook() {
 
         /** 展开去抖窗口（ms）：同一次点击的多个入口只展开一次。 */
         private const val EXPAND_DEBOUNCE_MS = 1200L
+
+    /** 「正在播放的应用」快照新鲜期（ms）：期内直接命中缓存，不在主线程做音频探测。 */
+    private const val ACTIVE_APPS_FRESH_MS = 800L
 
         /** 通过服务启动拉起后，延迟多久再展开面板（等待服务/控制器初始化）。 */
         private const val SERVICE_EXPAND_DELAY_MS = 250L

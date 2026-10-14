@@ -54,6 +54,11 @@ object AppVolumePanel {
     private const val PERCENT_MASTER_KEY = "side_volume_percent"
     private const val PERCENT_HIGHLIGHT = 0xFF3482FF.toInt()
 
+    /** 应用音量直接生效的执行器：相关调用会跨进程访问音频服务，统一放在后台线程执行。 */
+    private val applyExecutor = java.util.concurrent.Executors.newSingleThreadExecutor { task ->
+        Thread(task, "HyperRefine-AppVolumeApply").apply { isDaemon = true }
+    }
+
     private const val OPEN_DURATION_MS = 260L
     private const val CLOSE_DURATION_MS = 250L
 
@@ -194,16 +199,22 @@ object AppVolumePanel {
         context: Context,
         pluginClassLoader: ClassLoader?,
         anchor: View,
+        attempt: Int = 0,
     ) {
         hide()
         closing = false
         val density = context.resources.displayMetrics.density
-        // 正在播放的应用：与系统官方（音质音效 `playervolume.f.a`）完全同一套判定。
-        val apps = AppVolumePlayback.activePackages(context)
-
-        // 无正在播放的应用时不显示面板（不再显示「当前无播放」占位）。
+        // 正在播放的应用：与系统官方（音质音效 `playervolume.f.a`）完全同一套判定，读后台探测快照；
+        // 快照里没有应用时先请一次后台探测（主线程不等待音频 IPC，通话等场景该 IPC 会阻塞数秒）。
+        val apps = AppVolumePlayback.snapshot().packages
         if (apps.isEmpty()) {
-            HookHelper.log("$TAG: no active app, skip panel")
+            if (attempt == 0) {
+                AppVolumePlayback.refresh(context, force = true) {
+                    if (!isShowing()) show(root, dialog, context, pluginClassLoader, anchor, attempt = 1)
+                }
+            } else {
+                HookHelper.log("$TAG: no active app, skip panel")
+            }
             return
         }
         if (!OfficialVolumeColumnFactory.isAvailable(pluginClassLoader)) {
@@ -771,6 +782,15 @@ object AppVolumePanel {
             )
         }.onFailure { HookHelper.log("$TAG: forward failed", it) }
 
+        // 直接生效（`AudioManager.setPlayerVolume`）需要重新查找播放配置并跨进程调用音频服务，
+        // 通话等场景可能阻塞数秒，放到后台线程执行，避免卡住系统界面主线程。
+        val appContext = context.applicationContext ?: context
+        runCatching { applyExecutor.execute { applyPlayerVolume(appContext, pkg, v) } }
+            .onFailure { HookHelper.log("$TAG: forward enqueue failed", it) }
+    }
+
+    /** 让指定应用的音量立即生效（后台线程）。 */
+    private fun applyPlayerVolume(context: Context, pkg: String, volume: Float) {
         runCatching {
             val am = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager ?: return@runCatching
             val config = am.activePlaybackConfigurations.firstOrNull {
@@ -782,8 +802,8 @@ object AppVolumePanel {
                 android.media.AudioPlaybackConfiguration::class.java,
                 Float::class.javaPrimitiveType,
             )
-            set.invoke(am, config, v)
-        }
+            set.invoke(am, config, volume)
+        }.onFailure { HookHelper.log("$TAG: apply player volume failed", it) }
     }
 
     private const val TOUCHABLE_INSETS_FRAME = 0
