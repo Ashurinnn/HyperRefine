@@ -73,6 +73,8 @@
             android:name=".ui.screen.features.NotificationsActivity"
             android:exported="false"
             android:theme="@style/Theme.HyperRefine" />
+        <activity android:name=".ui.screen.features.NetworkIconsActivity"
+            android:exported="false" android:theme="@style/Theme.HyperRefine" />
         <activity
             android:name=".ui.screen.features.AodActivity"
             android:exported="false"

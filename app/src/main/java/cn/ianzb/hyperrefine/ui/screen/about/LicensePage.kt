@@ -155,7 +155,7 @@ private val licenseSections: List<LicenseSection> = listOf(
             LibraryInfo(
                 "Pengeek（米客）",
                 "OS4-26.10.13-test",
-                "GPL-3.0，仅通知功能思路参考（独立实现，未复用其代码或资源）",
+                "GPL-3.0，通知与状态栏功能思路参考（独立实现，未复用其代码或资源）",
                 "https://github.com/MonwF/customiuizer",
             ),
             LibraryInfo(
