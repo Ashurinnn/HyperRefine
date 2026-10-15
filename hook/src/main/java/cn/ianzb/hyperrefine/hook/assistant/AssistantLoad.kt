@@ -3,6 +3,7 @@ package cn.ianzb.hyperrefine.hook.assistant
 import cn.ianzb.hyperrefine.hook.base.BaseLoad
 import cn.ianzb.hyperrefine.hook.base.PackageTarget
 import cn.ianzb.hyperrefine.hook.prefs.HookPrefs
+import cn.ianzb.hyperrefine.hook.systemui.wallpaper.WallpaperDimKeys
 
 /**
  * 负一屏（`com.miui.personalassistant`）过渡动画优化目标 Load。
@@ -28,6 +29,10 @@ class AssistantLoad : BaseLoad() {
                 )
 
             target.packageName == AssistantKeys.TARGET_PACKAGE -> {
+                initHook(
+                    AssistantWallpaperDimBlurHook(),
+                    HookPrefs.getBoolean(WallpaperDimKeys.ENABLED, false),
+                )
                 initHook(
                     AssistantMaskAlphaHook(),
                     HookPrefs.getBoolean(AssistantKeys.MASK_ALPHA_ZERO, false),

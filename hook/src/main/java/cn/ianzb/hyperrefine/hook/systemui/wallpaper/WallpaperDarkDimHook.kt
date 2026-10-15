@@ -25,6 +25,9 @@ import java.lang.reflect.Method
  * [ComponentCallbacks] 作为兜底，并监听远程偏好让滑条改动即时生效（宿主不支持监听时退化为
  * 「重启系统界面」后生效）。只在数值真正变化时才发起跨进程调用，避免频繁 IPC。
  *
+ * 取壁纸做模糊的界面（控制中心、负一屏）读的是壁纸纹理本身、看不到这层 alpha，由
+ * [WallpaperDimBlurDim] 在这些界面上补一层同浓度的压暗。
+ *
  * 仅调用系统自身接口，不复制任何系统代码。
  */
 class WallpaperDarkDimHook : BaseHook() {
@@ -45,6 +48,7 @@ class WallpaperDarkDimHook : BaseHook() {
     override fun init() {
         val cl = target.classLoader ?: return
         val app = currentApplication()
+        WallpaperDimBlurDim.install(app)
         if (app != null) {
             attach(app)
         } else {
@@ -71,6 +75,7 @@ class WallpaperDarkDimHook : BaseHook() {
         }.onFailure { HookHelper.log("$tag: hook Application#onCreate failed", it) }
     }
 
+    @Suppress("OVERRIDE_DEPRECATION")
     private fun attach(app: Application) {
         if (!attached.add(app)) return
         hookConfigChanged(app)
