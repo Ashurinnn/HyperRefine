@@ -263,7 +263,7 @@
     <string name="volume_bar_l2_pos_summary">整体上下移动展开后的二级面板</string>
     <string name="volume_bar_l2_pos_portrait">竖屏位置</string>
     <string name="volume_bar_l2_pos_landscape">横屏位置</string>
-    <string name="volume_bar_l2_pos_percent_summary">100% 贴屏幕顶部，0% 贴屏幕底部</string>
+    <string name="volume_bar_l2_pos_percent_summary" formatted="false">100% 贴屏幕顶部，0% 贴屏幕底部</string>
     <string name="volume_bar_auto_balance_section">自动平衡高度</string>
     <string name="volume_bar_auto_balance_portrait">竖屏</string>
     <string name="volume_bar_auto_balance_landscape">横屏</string>
@@ -379,7 +379,7 @@
     <string name="volume_follow_icon_summary">颜色跟随音量图标（低音量灰色、正常蓝色）；关闭后固定灰色</string>
     <string name="brightness_follow_icon_summary">颜色跟随亮度图标（低亮度灰色、正常金色）；关闭后固定灰色</string>
     <string name="percent_position">高度</string>
-    <string name="percent_position_summary">数值越大位置越高（0% 最下，100% 最上）</string>
+    <string name="percent_position_summary" formatted="false">数值越大位置越高（0% 最下，100% 最上）</string>
     <string name="side_volume_interaction_section">交互</string>
     <string name="side_volume_position_section">显示位置</string>
     <string name="side_volume_inside">百分比显示在音量条内部</string>
@@ -391,7 +391,7 @@
     <string name="side_volume_pos_summary">自定义侧边音量条的竖直位置</string>
     <string name="side_volume_pos_portrait">竖屏位置</string>
     <string name="side_volume_pos_landscape">横屏位置</string>
-    <string name="side_volume_pos_percent_summary">100% 贴屏幕顶部，0% 贴屏幕底部</string>
+    <string name="side_volume_pos_percent_summary" formatted="false">100% 贴屏幕顶部，0% 贴屏幕底部</string>
 
     <string name="app_volume_section">多应用音量</string>
     <string name="app_volume_entry">多应用音量入口</string>
@@ -407,7 +407,7 @@
     <string name="app_volume_height_auto">高度自动</string>
     <string name="app_volume_height_auto_summary">自动让面板音量条与侧边音量条竖直对齐</string>
     <string name="app_volume_height_percent">高度</string>
-    <string name="app_volume_height_percent_summary">面板的高度位置，0% 最低、100% 最高</string>
+    <string name="app_volume_height_percent_summary" formatted="false">面板的高度位置，0% 最低、100% 最高</string>
     <string name="app_volume_hide_panel_bg">隐藏面板背景</string>
     <string name="app_volume_hide_panel_bg_summary">隐藏面板的玻璃 / 背景，只保留音量条</string>
 

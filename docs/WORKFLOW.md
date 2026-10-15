@@ -190,7 +190,69 @@
 
 ---
 
-## 5. 检查清单
+## 5. 英文文案与专有名词（`values-en`）
+
+界面英文文案集中在 `app/src/main/res/values-en/strings.xml`，与 `values/strings.xml` 同名键一一对应（当前各 454 条）。**专有名词一律使用官方英文名：不直译、不臆造**，中文侧继续按小米中文名书写；同一条文案里只允许一种写法。本节规则由 PR #40（HyperOS 4 英文界面文案修订）归纳。
+
+### 5.1 官方英文名的取值来源（按顺序）
+
+1. **设备自带资源最权威**：已知包名的英文值可直接从 `reverse_report/<包名>/*-resources.txt` 查（`resource 0x7f12xxxx string/xxx` 下面第一行 `()` 即默认英文值）。已核对过的例子：
+
+   | 资源 | 英文值 | 对应中文 |
+   |---|---|---|
+   | `string/mi_smart_hub_entry_title` | `Xiaomi Smart Hub` | 融合设备中心 |
+   | `string/state_screen_synergy` | `Using Home screen+` | 妙享桌面 |
+   | `string/quick_settings_mishare_advert_all_close` | `Xiaomi Share is off` | 小米互传 |
+   | 应用流转状态文案 | `Using app handoff` | 应用流转 |
+
+2. **英文界面**：把系统语言切成 English，进对应页面截图核对（系统组件与小米应用的英文名都在这里）。
+3. **官方资料**：小米官网 / 发布会英文页（用于系统尚未带英文资源的新功能）。
+4. 查不到官方名时，**宁可用描述性英文**说明这个开关做什么，也不要新造一个专有名词。
+
+### 5.2 已确认的写法对照
+
+| 采用（官方英文） | 不要写成 | 说明 |
+|---|---|---|
+| `HyperOS`（`HyperOS 4`） | `Hyper OS` | 系统名 |
+| `HyperRefine` | `Hyper Refine` | 本模块名，`app_name` 不翻译 |
+| `Xiaomi Smart Hub` | `Fusion Device Center` | 融合设备中心 |
+| `Home screen+` | `Mi Share Desktop` | 妙享桌面（跨设备桌面） |
+| `app handoff` | `cross-device streaming` | 应用流转 |
+| `Xiaomi Share` | `Mi Share` | 小米互传（旧名不再使用） |
+| `Mi Browser` | `Xiaomi Browser` | 小米浏览器（官方英文名仍是 `Mi Browser`） |
+| `Xiaomi Hyper XiaoAi` | `Xiao Ai` / `XiaoAI` | 超级小爱 |
+| `App vault` | `Assistant` | 负一屏 |
+| `Control center` | `control panel` | 控制中心 |
+| `Charging boost` | `fast charge` | 快充加速；通知文案 `charging boost start / end reminders` |
+| `Passkeys` / `Passwords` | 用 `Passkey` 当分区名 | 通行密钥；功能名 `Passkeys`，设置入口分区名 `Passwords` |
+| `AOD` / `always-on display` | `AOD screen` | 息屏显示；标题里用 `AOD`，正文可用全称 |
+| `notification shade` | `notification panel` | 下拉后的通知栏 |
+| `split screen`（`side-by-side` / `top-and-bottom`） | `split window left/right` | 分屏与方向 |
+| `Wi-Fi` / `WLAN` | `Wifi` / `wifi` | 无线网络；`WLAN / mobile data` 指 WLAN 与移动数据 |
+| `Root` | `root`（指权限时） | 权限名，如 `Root access not granted.` |
+| `DexKit` / `LSPosed` / `Miuix` / `libxposed` | 大小写随意写 | 框架与依赖名按官方大小写 |
+
+### 5.3 写法规则
+
+- **说明文字写成完整句子**：句首大写、句末句号、补足冠词。例如 `Root not granted, restart and other features unavailable` → `Root access not granted. App restart and other root-dependent features are unavailable.`；`failed, check permission and scope` → `Failed to clear the cache. Check permissions and scope.`
+- **不要用 `app(s)` / `time(s)` / `%d apps authorized` 这类缩写或直译计数**，改成「标签: 数值」：`Apps in scope: %d`、`Crashes: %d`、`Apps with hooks disabled: %d · tap to manage`。
+- **标题用名词短语，说明放副标题**：`titleRes` 写名词短语（`App appearance`），不要写成句子；描述性内容进 `summaryRes`。
+- **开关文案描述「解除什么限制」，不用 `Allow …`**：`Allow lock screen notifications` → `Remove lock screen notification restrictions`；`Allow editing protected notifications` → `Allow disabling protected notifications`。
+- **直译不通就写行为**：`Stepless split ratio` → `Freely adjust split-screen ratios`；`Hide overflow` → `Hide the ellipsis`；`Larger is stronger` → `Higher values increase the blur`。
+- **同一概念固定用同一术语**：`appearance`（不用 `beautify`）、`split screen`、`notification shade`、`Control center`、`app handoff`。
+- **占位符**：一条字符串里出现多个 `%` 时必须显式声明 `formatted="false"`（或改用 `%1$s` 位置参数），否则构建会报 `Multiple substitutions specified in non-positional format`。
+- **转义**：`&` 写成 `&amp;`，`'` 写成 `\'`。
+
+### 5.4 流程与自检
+
+1. 改动中文键时**同时**改 `values-en` 里的同名键（键名与数量一一对应）；
+2. 出现新专有名词时，先按 5.1 查到官方英文名、补进 5.2 表格，再写进文案；
+3. 提交前构建一次，确认不再出现 `Multiple substitutions specified in non-positional format` 等资源告警；
+4. 纯英文文案修订（如 PR #40）可以不单独写 `changelog.md`；若同时改了中文文案或功能行为，按常规写日志。
+
+---
+
+## 6. 检查清单
 
 - [ ] 涉及真机的 `adb` 操作均已获得用户明确授权，且在白名单内。
 - [ ] 未执行任何未授权 / 修改设备 / 读取隐私的命令。
@@ -198,4 +260,6 @@
 - [ ] 复用的第三方代码已核对许可证并保留原始声明。
 - [ ] 无许可证 / 非开源参考已致谢，且未复制其代码。
 - [ ] `LicensePage.kt`、`README.md`、`docs/CUSTOMIZE.md`、`changelog.md` 已同步。
+- [ ] 新增 / 修改的文案已在 `values-en` 补同名键，专有名词按 [第 5 节](#5-英文文案与专有名词values-en) 的对照表取官方英文名。
+- [ ] 构建日志没有 `Multiple substitutions specified in non-positional format` 一类的资源告警。
 - [ ] 构建通过并在 LSPosed 中验证 Hook 生效。
