@@ -1,5 +1,7 @@
 package cn.ianzb.hyperrefine.hook.systemui
 
+import android.animation.Animator
+import android.animation.AnimatorListenerAdapter
 import android.content.Context
 import android.content.Intent
 import android.graphics.Color
@@ -25,9 +27,13 @@ import cn.ianzb.hyperrefine.hook.systemui.glass.CcGlassKeys
 import cn.ianzb.hyperrefine.hook.systemui.glass.OfficialExpandedMaterial
 import cn.ianzb.hyperrefine.hook.systemui.radius.CcRadiusKeys
 import cn.ianzb.hyperrefine.hook.volume.AppVolumeTarget
+import cn.ianzb.hyperrefine.hook.volume.AppVolumeDelivery
+import cn.ianzb.hyperrefine.hook.volume.LatestValueDispatcher
+import cn.ianzb.hyperrefine.hook.volume.OwnedResources
 import cn.ianzb.hyperrefine.hook.xposed.HookHelper
 import cn.ianzb.hyperrefine.hook.xposed.Reflect
 import java.lang.reflect.Proxy
+import java.lang.ref.WeakReference
 
 /**
  * 「系统界面模式」的多应用音量面板 —— 原生竖向列样式。
@@ -59,6 +65,9 @@ object AppVolumePanel {
     private val applyExecutor = java.util.concurrent.Executors.newSingleThreadExecutor { task ->
         Thread(task, "HyperRefine-AppVolumeApply").apply { isDaemon = true }
     }
+    private val volumeUpdates = LatestValueDispatcher<Int, () -> Unit>(applyExecutor, { it() }) {
+        HookHelper.log("$TAG: volume apply failed", it)
+    }
 
     private const val OPEN_DURATION_MS = 260L
     private const val CLOSE_DURATION_MS = 250L
@@ -72,14 +81,20 @@ object AppVolumePanel {
     private var preDrawContainer: View? = null
     private var preDrawListener: ViewTreeObserver.OnPreDrawListener? = null
     private var windowAttrsOriginal: Pair<Float, Int>? = null
-    private val officialColumns = mutableListOf<OfficialVolumeColumnFactory.Column>()
+    private var officialColumns = newColumnResources()
+    private var showGeneration = 0L
+
+    private fun newColumnResources() = OwnedResources<OfficialVolumeColumnFactory.Column>(
+        release = { it.release() },
+        onFailure = { HookHelper.log("$TAG: column disposal failed", it) },
+    )
 
     /** 面板是否正在显示。 */
     fun isShowing(): Boolean = host != null
 
     /** 记录其它模块对「侧边一级音量列」子视图的框架玻璃调用（按子视图路径），供面板列创建时回放。 */
     fun recordSideGlass(sourceView: View, methodName: String, args: Array<Any?>) {
-        if (officialColumns.any { isDescendant(sourceView, it.view) }) return
+        if (officialColumns.values.any { isDescendant(sourceView, it.view) }) return
         val root = columnRoot(sourceView) ?: return
         val path = indexPath(sourceView, root) ?: return
         SideGlassStore.record(path, methodName, args)
@@ -132,10 +147,10 @@ object AppVolumePanel {
     fun hideByExpand() = close(dodge = true)
 
     private fun close(dodge: Boolean) {
+        showGeneration++ // A late playback probe must not reopen a dismissed volume window.
         val currentHost = host ?: return
-        // 先摘出本面板的列：动画结束后再释放，期间保留音量条一起淡出。
-        val toRelease = ArrayList(officialColumns)
-        officialColumns.clear()
+        if (closing) return
+        val columns = officialColumns
         val currentCard = card
         if (currentCard != null && currentCard.isAttachedToWindow) {
             closing = true
@@ -145,13 +160,17 @@ object AppVolumePanel {
             if (dodge) {
                 anim.translationX(currentCard.translationX + slideOutOffset(currentCard, dialogRef))
             }
-            anim.withEndAction {
-                toRelease.forEach { it.release() }
-                cleanup(currentHost)
-            }.start()
+            runCatching {
+                anim.withEndAction(null).setListener(object : AnimatorListenerAdapter() {
+                    override fun onAnimationEnd(animation: Animator) = cleanup(currentHost, columns)
+                    override fun onAnimationCancel(animation: Animator) = cleanup(currentHost, columns)
+                }).start()
+            }.onFailure {
+                cleanup(currentHost, columns)
+                HookHelper.log("$TAG: close animation failed", it)
+            }
         } else {
-            toRelease.forEach { it.release() }
-            cleanup(currentHost)
+            cleanup(currentHost, columns)
         }
     }
 
@@ -170,11 +189,16 @@ object AppVolumePanel {
         return (if (toLeft) -1f else 1f) * panel.width * 0.25f
     }
 
-    private fun cleanup(currentHost: View) {
-        if (host !== currentHost) return
+    private fun cleanup(currentHost: View, columns: OwnedResources<OfficialVolumeColumnFactory.Column>) {
+        if (host !== currentHost) {
+            columns.dispose()
+            return
+        }
+        showGeneration++
         host = null
         card = null
         closing = false
+        columns.dispose()
         preDrawListener?.let { listener ->
             runCatching {
                 preDrawContainer?.viewTreeObserver?.takeIf { it.isAlive }?.removeOnPreDrawListener(listener)
@@ -202,166 +226,187 @@ object AppVolumePanel {
         anchor: View,
         attempt: Int = 0,
     ) {
-        hide()
+        // Replacement is synchronous: old animation callbacks cannot take ownership of a new panel.
+        host?.let { old ->
+            card?.animate()?.withEndAction(null)?.setListener(null)?.cancel()
+            cleanup(old, officialColumns)
+        }
+        val requestGeneration = ++showGeneration
+        officialColumns = newColumnResources()
+        val columns = officialColumns
         closing = false
-        val density = context.resources.displayMetrics.density
-        // 正在播放的应用：与系统官方（音质音效 `playervolume.f.a`）逐条对齐的判定（共享 UID 感知），
-        // 读后台探测快照；快照里没有应用时先请一次后台探测（主线程不等待音频 IPC，
-        // 通话等场景该 IPC 会阻塞数秒）。
-        val apps = AppVolumePlayback.snapshot().targets
-        if (apps.isEmpty()) {
-            if (attempt == 0) {
-                AppVolumePlayback.refresh(context, force = true) {
-                    if (!isShowing()) show(root, dialog, context, pluginClassLoader, anchor, attempt = 1)
-                }
-            } else {
-                HookHelper.log("$TAG: no active app, skip panel")
-            }
-            return
-        }
-        if (!OfficialVolumeColumnFactory.isAvailable(pluginClassLoader)) {
-            HookHelper.log("$TAG: official VolumeColumn unavailable")
-            return
-        }
-
-        // 全窗口透明容器（不消费触摸），面板放在侧边音量条左侧，二者同时可见。
-        val container = FrameLayout(context).apply {
-            layoutParams = ViewGroup.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.MATCH_PARENT,
-            )
-            clipChildren = false
-            clipToPadding = false
-            isClickable = false
-        }
-
-        val panel = FrameLayout(context).apply {
-            background = null
-            clipChildren = false
-            clipToPadding = false
-            isClickable = true
-            // 初始透明：避免在展开动画播放前先闪一帧最终形态。
-            alpha = 0f
-            // 面板背景内边距：「多应用面板背景调节」开启后按上下 / 左右分别设置，否则维持现状 16dp。
-            val bgCustom = HookPrefs.getBoolean(VolumeBarKeys.PANEL_BG, false)
-            val padV = (if (bgCustom) {
-                HookPrefs.getFloat(VolumeBarKeys.PANEL_PAD_VERTICAL, VolumeBarKeys.DEFAULT_PAD)
-            } else {
-                VolumeBarKeys.DEFAULT_PAD
-            }).coerceIn(0f, 120f)
-            val padH = (if (bgCustom) {
-                HookPrefs.getFloat(VolumeBarKeys.PANEL_PAD_HORIZONTAL, VolumeBarKeys.DEFAULT_PAD)
-            } else {
-                VolumeBarKeys.DEFAULT_PAD
-            }).coerceIn(0f, 120f)
-            setPadding(
-                (padH * density).toInt(),
-                (padV * density).toInt(),
-                (padH * density).toInt(),
-                (padV * density).toInt(),
-            )
-        }
-        val maxWidth = (context.resources.displayMetrics.widthPixels * 0.92f).toInt()
-        fun panelLp() = FrameLayout.LayoutParams(
-            ViewGroup.LayoutParams.WRAP_CONTENT,
-            ViewGroup.LayoutParams.WRAP_CONTENT,
-        ).apply {
-            gravity = Gravity.END or Gravity.CENTER_VERTICAL
-            marginEnd = (12 * density).toInt()
-            topMargin = (MARGIN_DP * density).toInt()
-            bottomMargin = (MARGIN_DP * density).toInt()
-        }
-        // 面板背景单独成层，作为音量条面板的**兄弟视图**放在其后面（与官方二级面板一致），
-        // 使音量条玻璃取色时不会把面板背景纳入，从而与官方取色一致。
-        val bg = FrameLayout(context).apply {
-            background = null
-            clipChildren = false
-            clipToPadding = false
-            isClickable = false
-            alpha = 0f
-        }
-        container.addView(bg, panelLp())
-        panel.background = null
-        container.addView(panel, panelLp())
-
-        panel.addView(
-            buildBars(context, density, apps, pluginClassLoader!!, maxWidth),
-            FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT,
-            ),
-        )
-
-        // 竖直位置：「高度自动」时与侧边音量条竖直对齐；否则用「高度」百分比（0% 最低、100% 最高、50% 居中）。
-        val heightAuto = HookPrefs.getBoolean(AppVolumeKeys.HEIGHT_AUTO, true)
-        val heightPercent = HookPrefs.getFloat(AppVolumeKeys.HEIGHT_PERCENT, 50f).coerceIn(0f, 100f)
-        bg.addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
-            override fun onViewAttachedToWindow(v: View) = applyPanelBackground(v, context, pluginClassLoader)
-            override fun onViewDetachedFromWindow(v: View) {}
-        })
-        // 背景层尺寸跟随面板。
-        panel.addOnLayoutChangeListener { v, _, _, _, _, _, _, _, _ ->
-            val lp = bg.layoutParams
-            if (lp != null && (lp.width != v.width || lp.height != v.height)) {
-                lp.width = v.width
-                lp.height = v.height
-                bg.layoutParams = lp
-            }
-        }
-        // 音量条窗口隐藏（侧边音量条收回 / 超时消失）时一并移除面板，避免下次打开残留在最右。
-        container.addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
-            override fun onViewAttachedToWindow(v: View) {}
-            override fun onViewDetachedFromWindow(v: View) {
-                if (host === v) cleanup(v)
-            }
-        })
-
-        host = container
-        card = panel
-        dialogRef = dialog
-        root.addView(container)
-
-        // 侧边音量条保持显示；仅接管窗口触摸区域，使位于其左侧的面板可正常拖动。
-        pauseInsets(dialog)
-        clearWindowDim(dialog)
-
-        // 每帧跟踪侧边音量条位置（避免收起后重开时位置跳变 / 遮挡主音量条）；
-        // 首帧完成布局后再启动展开动画（面板初始 alpha=0，不会先闪最终形态）。
-        var started = false
-        val listener = object : ViewTreeObserver.OnPreDrawListener {
-            override fun onPreDraw(): Boolean {
-                // 淡出期间暂停跟随（否则侧边条一变就瞬移），交给整体平移 + 淡出。
-                if (!closing) {
-                    if (heightAuto) {
-                        alignToDialogBar(panel, dialog)
-                    } else {
-                        val available = container.height - panel.height
-                        if (available > 0) panel.translationY = (0.5f - heightPercent / 100f) * available
+        try {
+            val density = context.resources.displayMetrics.density
+            // 正在播放的应用：与系统官方（音质音效 `playervolume.f.a`）逐条对齐的判定（共享 UID 感知），
+            // 读后台探测快照；快照里没有应用时先请一次后台探测（主线程不等待音频 IPC，
+            // 通话等场景该 IPC 会阻塞数秒）。
+            val apps = AppVolumePlayback.snapshot().targets
+            if (apps.isEmpty()) {
+                if (attempt == 0) {
+                    val rootRef = WeakReference(root)
+                    val dialogViewRef = WeakReference(dialog)
+                    val anchorRef = WeakReference(anchor)
+                    AppVolumePlayback.refresh(context, force = true) {
+                        val currentRoot = rootRef.get() ?: return@refresh
+                        val currentDialog = dialogViewRef.get() ?: return@refresh
+                        val currentAnchor = anchorRef.get() ?: return@refresh
+                        if (requestGeneration == showGeneration && !isShowing() &&
+                            currentRoot.isAttachedToWindow && currentDialog.isShown
+                        ) show(currentRoot, currentDialog, currentAnchor.context, pluginClassLoader, currentAnchor, attempt = 1)
                     }
-                    positionLeftOfDialog(container, panel, dialog, density)
+                } else {
+                    HookHelper.log("$TAG: no active app, skip panel")
                 }
-                // 背景层跟随面板的位置 / 透明度（兄弟层，不参与音量条取色）。
-                bg.translationY = panel.translationY
-                bg.translationX = panel.translationX
-                val pLp = panel.layoutParams as? FrameLayout.LayoutParams
-                val bLp = bg.layoutParams as? FrameLayout.LayoutParams
-                if (pLp != null && bLp != null && bLp.marginEnd != pLp.marginEnd) {
-                    bLp.marginEnd = pLp.marginEnd
-                    bg.layoutParams = bLp
-                }
-                bg.alpha = panel.alpha
-                // 官方可能在展开 / 材质变化后重新应用窗口压暗，这里每帧兜底清除。
-                clearWindowDim(dialog)
-                if (!started && panel.width > 0) {
-                    started = true
-                    startShowAnimation(panel)
-                }
-                return true
+                return
             }
+            if (!OfficialVolumeColumnFactory.isAvailable(pluginClassLoader)) {
+                HookHelper.log("$TAG: official VolumeColumn unavailable")
+                return
+            }
+
+            // 全窗口透明容器（不消费触摸），面板放在侧边音量条左侧，二者同时可见。
+            val container = FrameLayout(context).apply {
+                layoutParams = ViewGroup.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                )
+                clipChildren = false
+                clipToPadding = false
+                isClickable = false
+            }
+
+            val panel = FrameLayout(context).apply {
+                background = null
+                clipChildren = false
+                clipToPadding = false
+                isClickable = true
+                // 初始透明：避免在展开动画播放前先闪一帧最终形态。
+                alpha = 0f
+                // 面板背景内边距：「多应用面板背景调节」开启后按上下 / 左右分别设置，否则维持现状 16dp。
+                val bgCustom = HookPrefs.getBoolean(VolumeBarKeys.PANEL_BG, false)
+                val padV = (if (bgCustom) {
+                    HookPrefs.getFloat(VolumeBarKeys.PANEL_PAD_VERTICAL, VolumeBarKeys.DEFAULT_PAD)
+                } else {
+                    VolumeBarKeys.DEFAULT_PAD
+                }).coerceIn(0f, 120f)
+                val padH = (if (bgCustom) {
+                    HookPrefs.getFloat(VolumeBarKeys.PANEL_PAD_HORIZONTAL, VolumeBarKeys.DEFAULT_PAD)
+                } else {
+                    VolumeBarKeys.DEFAULT_PAD
+                }).coerceIn(0f, 120f)
+                setPadding(
+                    (padH * density).toInt(),
+                    (padV * density).toInt(),
+                    (padH * density).toInt(),
+                    (padV * density).toInt(),
+                )
+            }
+            val maxWidth = (context.resources.displayMetrics.widthPixels * 0.92f).toInt()
+            fun panelLp() = FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+            ).apply {
+                gravity = Gravity.END or Gravity.CENTER_VERTICAL
+                marginEnd = (12 * density).toInt()
+                topMargin = (MARGIN_DP * density).toInt()
+                bottomMargin = (MARGIN_DP * density).toInt()
+            }
+            // 面板背景单独成层，作为音量条面板的**兄弟视图**放在其后面（与官方二级面板一致），
+            // 使音量条玻璃取色时不会把面板背景纳入，从而与官方取色一致。
+            val bg = FrameLayout(context).apply {
+                background = null
+                clipChildren = false
+                clipToPadding = false
+                isClickable = false
+                alpha = 0f
+            }
+            container.addView(bg, panelLp())
+            panel.background = null
+            container.addView(panel, panelLp())
+
+            panel.addView(
+                buildBars(context, density, apps, pluginClassLoader!!, maxWidth),
+                FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                ),
+            )
+
+            // 竖直位置：「高度自动」时与侧边音量条竖直对齐；否则用「高度」百分比（0% 最低、100% 最高、50% 居中）。
+            val heightAuto = HookPrefs.getBoolean(AppVolumeKeys.HEIGHT_AUTO, true)
+            val heightPercent = HookPrefs.getFloat(AppVolumeKeys.HEIGHT_PERCENT, 50f).coerceIn(0f, 100f)
+            bg.addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
+                override fun onViewAttachedToWindow(v: View) = applyPanelBackground(v, context, pluginClassLoader)
+                override fun onViewDetachedFromWindow(v: View) {}
+            })
+            // 背景层尺寸跟随面板。
+            panel.addOnLayoutChangeListener { v, _, _, _, _, _, _, _, _ ->
+                val lp = bg.layoutParams
+                if (lp != null && (lp.width != v.width || lp.height != v.height)) {
+                    lp.width = v.width
+                    lp.height = v.height
+                    bg.layoutParams = lp
+                }
+            }
+            // 音量条窗口隐藏（侧边音量条收回 / 超时消失）时一并移除面板，避免下次打开残留在最右。
+            container.addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
+                override fun onViewAttachedToWindow(v: View) {}
+                override fun onViewDetachedFromWindow(v: View) {
+                    cleanup(v, columns)
+                }
+            })
+
+            host = container
+            card = panel
+            dialogRef = dialog
+            root.addView(container)
+
+            // 侧边音量条保持显示；仅接管窗口触摸区域，使位于其左侧的面板可正常拖动。
+            pauseInsets(dialog)
+            clearWindowDim(dialog)
+
+            // 每帧跟踪侧边音量条位置（避免收起后重开时位置跳变 / 遮挡主音量条）；
+            // 首帧完成布局后再启动展开动画（面板初始 alpha=0，不会先闪最终形态）。
+            var started = false
+            val listener = object : ViewTreeObserver.OnPreDrawListener {
+                override fun onPreDraw(): Boolean {
+                    // 淡出期间暂停跟随（否则侧边条一变就瞬移），交给整体平移 + 淡出。
+                    if (!closing) {
+                        if (heightAuto) {
+                            alignToDialogBar(panel, dialog)
+                        } else {
+                            val available = container.height - panel.height
+                            if (available > 0) panel.translationY = (0.5f - heightPercent / 100f) * available
+                        }
+                        positionLeftOfDialog(container, panel, dialog, density)
+                    }
+                    // 背景层跟随面板的位置 / 透明度（兄弟层，不参与音量条取色）。
+                    bg.translationY = panel.translationY
+                    bg.translationX = panel.translationX
+                    val pLp = panel.layoutParams as? FrameLayout.LayoutParams
+                    val bLp = bg.layoutParams as? FrameLayout.LayoutParams
+                    if (pLp != null && bLp != null && bLp.marginEnd != pLp.marginEnd) {
+                        bLp.marginEnd = pLp.marginEnd
+                        bg.layoutParams = bLp
+                    }
+                    bg.alpha = panel.alpha
+                    // 官方可能在展开 / 材质变化后重新应用窗口压暗，这里每帧兜底清除。
+                    clearWindowDim(dialog)
+                    if (!started && panel.width > 0) {
+                        started = true
+                        startShowAnimation(panel)
+                    }
+                    return true
+                }
+            }
+            container.viewTreeObserver.addOnPreDrawListener(listener)
+            preDrawContainer = container
+            preDrawListener = listener
+        } catch (failure: Throwable) {
+            val current = host
+            if (current != null && officialColumns === columns) cleanup(current, columns) else columns.dispose()
+            throw failure
         }
-        container.viewTreeObserver.addOnPreDrawListener(listener)
-        preDrawContainer = container
-        preDrawListener = listener
     }
 
     /** 把面板右边缘贴到侧边音量条左边缘（垂直居中）。 */
@@ -392,7 +437,7 @@ object AppVolumePanel {
      */
     private fun alignToDialogBar(panel: View, dialog: View) {
         runCatching {
-            val panelSlider = officialColumns.firstOrNull()?.slider ?: return
+            val panelSlider = officialColumns.values.firstOrNull()?.slider ?: return
             val dialogSlider = findSideVolumeSlider(dialog) ?: return
             if (panelSlider.height <= 0 || dialogSlider.height <= 0) return
             val root = panel.rootView
@@ -786,22 +831,23 @@ object AppVolumePanel {
     private fun forward(context: Context, app: AppVolumeTarget, volume: Float) {
         if (!volume.isFinite()) return
         val v = volume.coerceIn(0f, 1f)
-        runCatching {
-            context.sendBroadcast(
-                Intent(AppVolumeKeys.ACTION_SET_VOLUME)
-                    .setPackage(AppVolumeKeys.TARGET_PACKAGE)
-                    .putExtra(AppVolumeKeys.EXTRA_PACKAGE, app.packageName)
-                    .putExtra(AppVolumeKeys.EXTRA_UID, app.uid)
-                    .putExtra(AppVolumeKeys.EXTRA_VOLUME, v)
-                    .addFlags(Intent.FLAG_RECEIVER_FOREGROUND),
-            )
-        }.onFailure { HookHelper.log("$TAG: forward failed", it) }
-
-        // 直接生效（`AudioManager.setPlayerVolume`）需要重新查找播放配置并跨进程调用音频服务，
-        // 通话等场景可能阻塞数秒，放到后台线程执行，避免卡住系统界面主线程。
         val appContext = context.applicationContext ?: context
-        runCatching { applyExecutor.execute { AppVolumePlayback.applyVolume(appContext, app, v) } }
-            .onFailure { HookHelper.log("$TAG: forward enqueue failed", it) }
+        volumeUpdates.submit(app.uid) {
+            // MiSound mirrors a successful direct write. If it failed, retain the old receiver fallback.
+            AppVolumeDelivery.send(v, write = { AppVolumePlayback.applyVolume(appContext, app, it) }) { value, applied ->
+                runCatching {
+                    appContext.sendBroadcast(
+                        Intent(AppVolumeKeys.ACTION_SET_VOLUME)
+                            .setPackage(AppVolumeKeys.TARGET_PACKAGE)
+                            .putExtra(AppVolumeKeys.EXTRA_PACKAGE, app.packageName)
+                            .putExtra(AppVolumeKeys.EXTRA_UID, app.uid)
+                            .putExtra(AppVolumeKeys.EXTRA_VOLUME, value)
+                            .putExtra(AppVolumeKeys.EXTRA_ALREADY_APPLIED, applied)
+                            .addFlags(Intent.FLAG_RECEIVER_FOREGROUND),
+                    )
+                }.onFailure { HookHelper.log("$TAG: forward failed", it) }
+            }
+        }
     }
 
     private const val TOUCHABLE_INSETS_FRAME = 0

@@ -176,19 +176,30 @@ object OfficialVolumeColumnFactory {
         updateSliderRatio?.let { runCatching { it.invoke(instance) } }
 
         slider.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            private var lastCommitted = -1
+
+            private fun commit(progress: Int) {
+                val percent = (progress * 100f / SLIDER_MAX).toInt().coerceIn(0, 100)
+                if (percent == lastCommitted) return
+                lastCommitted = percent
+                onCommit(percent)
+            }
+
             override fun onProgressChanged(seekBar: SeekBar, progress: Int, fromUser: Boolean) {
                 runCatching { toProgressWithAnim.invoke(progressView, fromUser, seekBar) }
                     .onFailure { HookHelper.log("OfficialVolumeColumn: progress anim failed", it) }
                 val percent = (progress * 100f / SLIDER_MAX).toInt().coerceIn(0, 100)
                 onPercent(percent)
-                if (fromUser) onCommit(percent)
+                if (fromUser) commit(progress)
             }
 
             override fun onStartTrackingTouch(seekBar: SeekBar) {
+                lastCommitted = -1
                 setTracking?.let { runCatching { it.invoke(instance, true) } }
             }
 
             override fun onStopTrackingTouch(seekBar: SeekBar) {
+                commit(seekBar.progress)
                 setTracking?.let { runCatching { it.invoke(instance, false) } }
             }
         })

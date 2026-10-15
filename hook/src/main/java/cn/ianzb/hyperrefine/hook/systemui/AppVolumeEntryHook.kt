@@ -15,6 +15,7 @@ import cn.ianzb.hyperrefine.hook.prefs.HookPrefs
 import cn.ianzb.hyperrefine.hook.status.HookStatusReporter
 import cn.ianzb.hyperrefine.hook.xposed.HookHelper
 import cn.ianzb.hyperrefine.hook.xposed.Reflect
+import java.lang.ref.WeakReference
 import java.util.WeakHashMap
 
 /**
@@ -25,17 +26,14 @@ import java.util.WeakHashMap
  * 再把它接进 `VolumeShowHideAnimator` 的 `mRingerBtnLayouts`，使其拥有与原生按钮完全一致
  * 的外观与「自上而下递增延迟」的出现动画。
  *
- * 点击后拉起 MiSound 的 `VolumeUIService` 打开原生多应用音量面板。
+ * 点击后在系统界面显示原生音量列面板，音量镜像与 MiSound 同步。
  */
 class AppVolumeEntryHook : BaseHook() {
 
     override val key: String = AppVolumeKeys.ENTRY
 
-    /** 每个 ringer 父容器对应的入口视图。 */
-    private val entries = WeakHashMap<ViewGroup, View>()
-
-    /** 每个官方 `MiuiRingerModeLayout` 对应的入口 RingerButtonHelper。 */
-    private val helpers = WeakHashMap<Any, Any>()
+    /** The entry owns its helper; the global lookup must not keep an old view tree alive. */
+    private class EntryState(val helper: Any)
 
     /** 入口最近一次的显示状态，避免重复播放透明度动画。 */
     private val lastVisible = WeakHashMap<View, Boolean>()
@@ -68,7 +66,7 @@ class AppVolumeEntryHook : BaseHook() {
 
     /** 最近的音量面板控制器，供注入后立即刷新显隐。 */
     @Volatile
-    private var lastController: Any? = null
+    private var lastController: WeakReference<Any>? = null
 
     override fun init() {
         // 本 hook 同时实现「入口常显」，据实上报其生效状态。
@@ -170,14 +168,13 @@ class AppVolumeEntryHook : BaseHook() {
             inflated.isClickable = true
             inflated.isFocusable = true
             parent.addView(inflated, insertAt.coerceIn(0, parent.childCount))
-            entries[parent] = inflated
             setupEntryBehavior(inflated)
             HookHelper.log("$tag: entry injected into ${parent.javaClass.simpleName}")
             attachDividerSync(parent)
             inflated
         }
         joinAnimator(animator, entry)
-        lastController?.let { updateVisibility(it, entry) }
+        lastController?.get()?.let { updateVisibility(it, entry) }
     }
 
     /** 仅当入口尚未加入动画数组时，把入口与对应的 X 记录一起追加。 */
@@ -204,7 +201,7 @@ class AppVolumeEntryHook : BaseHook() {
                 ?: return@runCatching
             ctor.isAccessible = true
             val helper = ctor.newInstance(outer, entry, false, false)
-            helpers[outer] = helper
+            entry.tag = EntryState(helper)
             helperUpdateState(helper)
         }.onFailure { HookHelper.log("$tag: create RingerButtonHelper failed", it) }
 
@@ -254,8 +251,8 @@ class AppVolumeEntryHook : BaseHook() {
             method.isAccessible = true
             runCatching {
                 HookHelper.hookAfter(method) { param ->
-                    val outer = param.thisObject ?: return@hookAfter
-                    val helper = helpers[outer] ?: return@hookAfter
+                    val outer = param.thisObject as? View ?: return@hookAfter
+                    val helper = (findEntry(outer)?.tag as? EntryState)?.helper ?: return@hookAfter
                     runCatching {
                         when (method.name) {
                             "updateExpandedH" -> helperOnExpanded(
@@ -392,7 +389,7 @@ class AppVolumeEntryHook : BaseHook() {
                 runCatching {
                     HookHelper.hookAfter(method) { param ->
                         param.thisObject?.let {
-                            lastController = it
+                            lastController = WeakReference(it)
                             onController(it, method.name)
                         }
                     }
@@ -437,7 +434,7 @@ class AppVolumeEntryHook : BaseHook() {
     }
 
     private fun findEntry(root: View): View? {
-        if (root.tag == TAG_ENTRY) return root
+        if (isEntry(root)) return root
         if (root is ViewGroup) {
             for (i in 0 until root.childCount) {
                 findEntry(root.getChildAt(i))?.let { return it }
@@ -531,7 +528,7 @@ class AppVolumeEntryHook : BaseHook() {
     private fun findDndRoot(root: View): View? {
         var lastParent: View? = null
         fun visit(v: View) {
-            if (v.tag == TAG_ENTRY) return
+            if (isEntry(v)) return
             if (v.javaClass.name.contains("VolumeBlurFrameLayout")) {
                 lastParent = v.parent as? View
                 return
@@ -679,7 +676,7 @@ class AppVolumeEntryHook : BaseHook() {
         // 清掉上一次淡出挂的结束动作，避免复用时在本次动画结束时误收起入口。
         entry.animate().alpha(1f).withEndAction(null).setDuration(FADE_DURATION_MS).start()
         shiftPanel(entry, true)
-        if (!autoRefreshing) lastController?.let { maybeAutoShow(it, entry) }
+        if (!autoRefreshing) lastController?.get()?.let { maybeAutoShow(it, entry) }
     }
 
     private fun updateVisibility(controller: Any, entry: View) {
@@ -690,7 +687,11 @@ class AppVolumeEntryHook : BaseHook() {
                 AppVolumePlayback.snapshot().hasActive)
         applyEntryState(entry, visible, dodge = expanded)
         // 快照过期时请一次后台刷新；结果回来（播放状态可能已变化）再重算一次入口状态。
-        AppVolumePlayback.refresh(entry.context) { lastController?.let { updateVisibility(it, entry) } }
+        val entryRef = WeakReference(entry)
+        AppVolumePlayback.refresh(entry.context) {
+            val currentEntry = entryRef.get() ?: return@refresh
+            lastController?.get()?.let { updateVisibility(it, currentEntry) }
+        }
     }
 
     /**
@@ -744,6 +745,8 @@ class AppVolumeEntryHook : BaseHook() {
     }
 
     // ---------------- 资源 ----------------
+
+    private fun isEntry(view: View): Boolean = view.tag == TAG_ENTRY || view.tag is EntryState
 
     private fun loadModuleIcon(context: Context): android.graphics.drawable.Drawable? = runCatching {
         val module = context.createPackageContext(

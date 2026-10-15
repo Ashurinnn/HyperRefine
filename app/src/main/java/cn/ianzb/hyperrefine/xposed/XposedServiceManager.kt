@@ -51,7 +51,11 @@ object XposedServiceManager {
 
     fun init() {
         XposedServiceHelper.registerListener(listener)
-        checkRoot()
+    }
+
+    /** Receiver cold starts bind services only; check Root once when the user actually opens the UI. */
+    fun checkRootOnUiLaunch() {
+        if (!rootChecked) checkRoot()
     }
 
     /**
@@ -59,7 +63,7 @@ object XposedServiceManager {
      *
      * 检测会真正拉起一次 `su`，在部分 Root 管理器上会弹出授权 / 使用提示，
      * 因此只在两个时机调用：
-     * 1. 应用启动时（[init]）；
+     * 1. 首次进入应用界面（[checkRootOnUiLaunch]）；
      * 2. 用户在主页手动点按状态卡片。
      * 其余场景（回到前台、定时轮询等）一律复用上一次结果。
      */

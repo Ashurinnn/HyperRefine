@@ -1,20 +1,15 @@
 package cn.ianzb.hyperrefine.xposed
 
-import java.io.BufferedReader
-
 /**
  * 简易 root 执行工具，用于直接删除各目标应用的 DexKit 缓存目录。
  */
 object RootHelper {
 
-    fun isRootAvailable(): Boolean = runCatching {
-        val process = ProcessBuilder("su", "-c", "id")
+    fun isRootAvailable(): Boolean = RootProbe.check(start = {
+        ProcessBuilder("su", "-c", "id")
             .redirectErrorStream(true)
             .start()
-        val output = process.inputStream.bufferedReader().use { it.readText() }
-        process.waitFor()
-        output.contains("uid=0")
-    }.getOrDefault(false)
+    })
 
     fun exec(command: String): Boolean = runCatching {
         val process = ProcessBuilder("su", "-c", command)

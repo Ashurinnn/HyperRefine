@@ -22,6 +22,8 @@ import cn.ianzb.hyperrefine.hook.base.BaseHook
 import cn.ianzb.hyperrefine.hook.prefs.HookPrefs
 import cn.ianzb.hyperrefine.hook.status.HookStatusReporter
 import cn.ianzb.hyperrefine.hook.systemui.AppVolumePlayback
+import cn.ianzb.hyperrefine.hook.volume.AppVolumeDelivery
+import cn.ianzb.hyperrefine.hook.volume.LatestValueDispatcher
 import cn.ianzb.hyperrefine.hook.systemui.radius.CcRadiusKeys
 import cn.ianzb.hyperrefine.hook.xposed.HookHelper
 import cn.ianzb.hyperrefine.hook.xposed.Reflect
@@ -48,7 +50,10 @@ class MiSoundAppVolumeHook : BaseHook() {
 
     /** 音量写入后台执行器：音频 / 包管理 IPC 在通话等场景可能阻塞数秒，不能占用主线程。 */
     private val applyExecutor = java.util.concurrent.Executors.newSingleThreadExecutor { task ->
-        Thread(task, "HyperRefine-AppVolumeApply")
+        Thread(task, "HyperRefine-AppVolumeApply").apply { isDaemon = true }
+    }
+    private val volumeUpdates = LatestValueDispatcher<String, () -> Unit>(applyExecutor, { it() }) {
+        HookHelper.log("$tag: forwarded volume update failed", it)
     }
 
     /** 本次打开是否已播放进入动画。 */
@@ -821,14 +826,14 @@ class MiSoundAppVolumeHook : BaseHook() {
 
     // ---------------- 模块百分比功能（外观统一，跟随开关） ----------------
 
-    private val percentTexts = java.util.WeakHashMap<View, TextView>()
+    private val percentTexts = java.util.WeakHashMap<View, WeakReference<TextView>>()
     private val percentPolls = java.util.WeakHashMap<View, Runnable>()
     private val lastProgress = java.util.WeakHashMap<View, Int>()
 
     /** 为每个音量条添加（或复用）一个百分比文本视图，样式对齐侧边音量条。 */
     private fun ensurePercentText(slider: View) {
         val parent = slider.parent as? ViewGroup ?: return
-        val existing = percentTexts[slider]
+        val existing = percentTexts[slider]?.get()
         if (existing != null && existing.parent === parent) return
         val tv = android.widget.TextView(slider.context).apply {
             setTextColor(0xFFFFFFFF.toInt())
@@ -844,13 +849,13 @@ class MiSoundAppVolumeHook : BaseHook() {
             topMargin = (PERCENT_TOP_MARGIN_DP * slider.resources.displayMetrics.density).toInt()
         }
         runCatching { parent.addView(tv, lp) }
-        percentTexts[slider] = tv
+        percentTexts[slider] = WeakReference(tv)
     }
 
     /** 单个音量条的百分比文本：跟随模块「侧边音量条百分比」开关与样式。 */
     private fun renderPercent(slider: View) {
         val seek = slider as? android.widget.SeekBar ?: return
-        val tv = percentTexts[slider] ?: return
+        val tv = percentTexts[slider]?.get() ?: return
         val enabled = HookPrefs.getBoolean(PERCENT_MASTER_KEY, false)
         if (!enabled) {
             if (tv.visibility != View.GONE) tv.visibility = View.GONE
@@ -979,9 +984,13 @@ class MiSoundAppVolumeHook : BaseHook() {
     private fun startPercentPoll(card: View, controller: Any) {
         if (percentPolls.containsKey(card)) return
         openStartedAt[card] = SystemClock.uptimeMillis()
+        val cardRef = WeakReference(card)
+        val controllerRef = WeakReference(controller)
         val runnable = object : Runnable {
             override fun run() {
-                if (!card.isAttachedToWindow) {
+                val card = cardRef.get() ?: return
+                val controller = controllerRef.get()
+                if (!card.isAttachedToWindow || controller == null) {
                     percentPolls.remove(card)
                     openStartedAt.remove(card)
                     pendingContentRefresh.remove(card)
@@ -1276,7 +1285,8 @@ class MiSoundAppVolumeHook : BaseHook() {
                         val uid = intent.getIntExtra(AppVolumeKeys.EXTRA_UID, -1)
                         val volume = intent.getFloatExtra(AppVolumeKeys.EXTRA_VOLUME, -1f)
                         if (volume.isFinite() && volume >= 0f) {
-                            applyForwardedVolume(c?.applicationContext ?: context, pkg, uid, volume)
+                            val alreadyApplied = intent.getBooleanExtra(AppVolumeKeys.EXTRA_ALREADY_APPLIED, false)
+                            applyForwardedVolume(c?.applicationContext ?: context, pkg, uid, volume, alreadyApplied)
                         }
                     }
                 }
@@ -1297,34 +1307,31 @@ class MiSoundAppVolumeHook : BaseHook() {
      * 「系统界面模式」转发落地：用官方同款机制（`AudioManager.setPlayerVolume`）生效，
      * 并把数值写回官方面板镜像（控制器 `w`），使「音质音效」面板数值与系统界面同步。
      */
-    private fun applyForwardedVolume(context: Context, pkg: String, uid: Int, volume: Float) {
+    private fun applyForwardedVolume(context: Context, pkg: String, uid: Int, volume: Float, alreadyApplied: Boolean) {
         // 广播在 Misound 主线程派发；音频 / 包管理 IPC 在通话等场景可能阻塞数秒，
         // 探测与写入放到后台线程，仅镜像刷新（View 操作）回主线程执行。
         val appContext = context.applicationContext ?: context
-        runCatching {
-            applyExecutor.execute {
-                val app = AppVolumePlayback.targetForPackage(appContext, pkg, uid) ?: run {
-                    HookHelper.log("$tag: invalid volume target $pkg uid=$uid")
-                    return@execute
-                }
-                val v = volume.coerceIn(0f, 1f)
-                val applied = AppVolumePlayback.applyVolume(appContext, app, v)
-                if (applied == 0) {
-                    HookHelper.log("$tag: no active player updated for $pkg uid=${app.uid}")
-                    return@execute
-                }
-                HookHelper.log("$tag: forwarded setPlayerVolume $pkg uid=${app.uid} players=$applied -> $v")
-                // 写回镜像 + 刷新面板（若控制器可达）。
-                android.os.Handler(android.os.Looper.getMainLooper()).post {
-                    val controller = controllerRef?.get() ?: resolveController(appContext)
-                    if (controller != null) {
-                        runCatching { Reflect.callMethod(controller, "w", app.volumeKey, v) }
-                            .onFailure { HookHelper.log("$tag: mirror volume failed", it) }
-                        runCatching { Reflect.callMethod(controller, "E") }
-                    }
-                }
+        val identity = if (uid >= 10_000) "uid:$uid" else "package:$pkg"
+        volumeUpdates.submit(identity) {
+            val app = AppVolumePlayback.targetForPackage(appContext, pkg, uid) ?: run {
+                HookHelper.log("$tag: invalid volume target $pkg uid=$uid")
+                return@submit
             }
-        }.onFailure { HookHelper.log("$tag: forward apply enqueue failed", it) }
+            // 写回镜像 + 刷新面板（若控制器可达）。
+            AppVolumeDelivery.receive(volume, alreadyApplied,
+                write = { AppVolumePlayback.applyVolume(appContext, app, it) },
+                mirror = { v ->
+                    android.os.Handler(android.os.Looper.getMainLooper()).post {
+                        val controller = controllerRef?.get() ?: resolveController(appContext)
+                        if (controller != null) {
+                            runCatching { Reflect.callMethod(controller, "w", app.volumeKey, v) }
+                                .onFailure { HookHelper.log("$tag: mirror volume failed", it) }
+                            runCatching { Reflect.callMethod(controller, "E") }
+                        }
+                    }
+                },
+            )
+        }
     }
 
     companion object {

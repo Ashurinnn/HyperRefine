@@ -554,7 +554,8 @@ object XposedServiceManager {
     var rootChecked: Boolean            // 是否已完成 Root 检测
     var scope: List<String>             // Compose 可观察
 
-    fun init()                          // 在 Application.onCreate 调用（含 Root 检测）
+    fun init()                          // 在 Application.onCreate 调用，仅绑定服务
+    fun checkRootOnUiLaunch()           // 首次进入 MainActivity 时检测，重建页面不重复检测
     fun checkRoot()                     // 异步检测 Root 权限（会真正拉起一次 su）
     fun getService(): XposedService?
     fun refreshScope()
@@ -565,8 +566,10 @@ object XposedServiceManager {
 ```
 
 **Root 检测时机**：`checkRoot()` 会真正拉起一次 `su`，在部分 Root 管理器上会弹出授权 / 使用
-提示，因此只在两个时机调用——应用启动（`init()`）与用户在主页手动点按状态卡片；不要做定时轮询
-或每次回到前台都检测，其余场景复用上一次结果（`isRootAvailable` / `rootChecked`）。
+提示，因此只在两个时机调用——首次进入应用界面（`checkRootOnUiLaunch()`）与用户在主页手动点按状态卡片；
+后台状态广播冷启动仅绑定服务，不检测 Root。不要做定时轮询或每次回到前台都检测，其余场景复用本进程
+的上一次结果（`isRootAvailable` / `rootChecked`），不持久化授权状态。检测等待授权最长 30 秒，超时按不可用处理，
+用户可点按状态卡片重新检测。多应用音量资源与写入契约见 [生命周期与音量写入说明](APP_VOLUME_LIFECYCLE.md)。
 
 ### 4.2 `RootHelper`
 

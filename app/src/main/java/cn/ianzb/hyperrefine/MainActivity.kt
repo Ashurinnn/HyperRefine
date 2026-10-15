@@ -97,6 +97,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        XposedServiceManager.checkRootOnUiLaunch()
         enableEdgeToEdge()
         window.isNavigationBarContrastEnforced = false
 

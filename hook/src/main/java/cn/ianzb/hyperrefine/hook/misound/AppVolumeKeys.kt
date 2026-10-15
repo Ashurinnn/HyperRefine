@@ -53,6 +53,9 @@ object AppVolumeKeys {
     /** [ACTION_SET_VOLUME]：目标音量（0f..1f）。 */
     const val EXTRA_VOLUME = "hyperrefine_app_volume_value"
 
+    /** New senders set this only after a successful direct write; old broadcasts still write audio. */
+    const val EXTRA_ALREADY_APPLIED = "hyperrefine_app_volume_already_applied"
+
     /** MiSound 多应用音量控制器（混淆类）。 */
     const val CONTROLLER_CLASS = "com.miui.misound.playervolume.a"
 
