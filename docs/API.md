@@ -606,6 +606,7 @@ object SafeModeReader {
     fun refresh()
     fun isInSafeMode(packageName: String): Boolean
     fun crashCount(packageName: String): Int
+    fun noteUserRestart(packageName: String)   // 应用内主动重启目标后调用，排除误判
     fun reset(packageName: String)
     fun resetAll()
 }
@@ -613,9 +614,10 @@ object SafeModeReader {
 
 **兜底机制（`:hook` 的 `SafeModeManager`）**
 
-- 每次目标进程加载 hook 前写入「正在加载」时间戳；进程存活超过 15s 后清除并重置计数。
-- 若在存活窗口（60s）内再次启动，判定为一次疑似 hook 崩溃并累加；达到阈值（普通 3 次、关键应用 2 次）后自动进入安全模式，跳过该包全部 hook。
-- 关键应用：`system` / `android` / `com.android.systemui` / `com.android.settings` / `com.miui.home` / `com.miui.securitycenter`。
+- 进程每次成功装载 hook 后由入口统一上报一次「启动」；上报来自含 `:` 的子进程时不计入，避免与主进程混合误判。
+- 15s 存活窗口内的重复启动计为一次疑似崩溃并累加，达到阈值（3 次）后自动进入安全模式，跳过该包全部 hook；启动间隔超过 15s 会重置计数。
+- 在应用内主动重启目标应用（含「重启系统界面」）后，其 30s 内的下一次启动不计入计数。
+- 关键进程：`android` / `system` / `com.android.systemui` / `com.miui.home`。
 - `XposedEntry.onPackageReady` 与 `onSystemServerStarting` 均已接入，避免系统应用反复崩溃导致无法开机。
 - 作用域页会标注「安全模式」并提供一键恢复（`SafeModeReader.reset`）。
 

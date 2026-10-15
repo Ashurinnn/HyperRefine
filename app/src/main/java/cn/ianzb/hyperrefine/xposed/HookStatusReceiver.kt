@@ -44,7 +44,10 @@ class HookStatusReceiver : BroadcastReceiver() {
 
         // 目标进程成功装载 hook 即视为一次进程启动，用于安全模式的崩溃循环计数。
         SafeModeReader.initialize(context)
-        SafeModeReader.recordProcessStart(sourcePackage!!)
+        SafeModeReader.recordProcessStart(
+            sourcePackage!!,
+            intent.getStringExtra(HookStatusContract.EXTRA_SOURCE_PROCESS) ?: sourcePackage,
+        )
 
         val reportedVersion = intent.getLongExtra(HookStatusContract.EXTRA_MODULE_VERSION, 0L)
         HookStatusStore.initialize(context)
