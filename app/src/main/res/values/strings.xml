@@ -499,4 +499,13 @@
     <string name="sb_wifi_hide_activity">隐藏 Wi-Fi 网络活动指示器</string>
     <string name="sb_mobile_type_section">移动网络类型</string>
     <string name="sb_mobile_hide_type">完全隐藏网络类型</string>
+    <string name="sb_mobile_dual_section">堆叠信号</string>
+    <string name="sb_dual_rows">显示双排堆叠信号</string>
+    <string name="sb_dual_rows_summary">开启后移动信号将更改为堆叠显示，请自行调整缩放和位置偏移量；修改完成后需要重启系统界面。</string>
+    <string name="sb_icon_scale">图标缩放</string>
+    <string name="sb_left_gap">左侧间距</string>
+    <string name="sb_right_gap">右侧间距</string>
+    <string name="sb_vertical_offset">垂直偏移</string>
+    <string name="sb_unit_dp">dp</string>
+    <string name="sb_unit_scale">×</string>
 </resources>

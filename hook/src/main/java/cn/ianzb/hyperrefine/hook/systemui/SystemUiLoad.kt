@@ -12,6 +12,7 @@ import cn.ianzb.hyperrefine.hook.systemui.radius.CcRadiusKeys
 import cn.ianzb.hyperrefine.hook.systemui.wallpaper.WallpaperDarkDimHook
 import cn.ianzb.hyperrefine.hook.systemui.wallpaper.WallpaperDimKeys
 import cn.ianzb.hyperrefine.hook.systemui.statusbar.HideWifiActivityHook
+import cn.ianzb.hyperrefine.hook.systemui.statusbar.DualSimSignalHook
 import cn.ianzb.hyperrefine.hook.systemui.statusbar.MobileIndicatorVisibilityHook
 import cn.ianzb.hyperrefine.hook.systemui.statusbar.StatusBarKeys
 
@@ -28,6 +29,7 @@ class SystemUiLoad : BaseLoad() {
     override fun onPackageLoaded(target: PackageTarget) {
         initHook(HideWifiActivityHook(), HookPrefs.getBoolean(StatusBarKeys.WIFI_ACTIVITY))
         initHook(MobileIndicatorVisibilityHook(), HookPrefs.getBoolean(StatusBarKeys.HIDE_TYPE))
+        initHook(DualSimSignalHook(), HookPrefs.getBoolean(StatusBarKeys.DUAL_ROWS))
         initHook(CcVolumePercentHook(), HookPrefs.getBoolean(CcVolumePercentHook.KEY, false))
         initHook(CcBrightnessPercentHook(), HookPrefs.getBoolean(CcBrightnessPercentHook.KEY, false))
         initHook(SideVolumePercentHook(), HookPrefs.getBoolean(SideVolumePercentHook.KEY, false))
