@@ -499,4 +499,13 @@
     <string name="sb_wifi_hide_activity">Hide Wi-Fi activity indicators</string>
     <string name="sb_mobile_type_section">Mobile network type</string>
     <string name="sb_mobile_hide_type">Hide network type completely</string>
+    <string name="sb_mobile_dual_section">Stacked signals</string>
+    <string name="sb_dual_rows">Show two rows of stacked signals</string>
+    <string name="sb_dual_rows_summary">When enabled, mobile signal indicators use a stacked layout. Adjust the scale and position offsets as needed. Restart SystemUI after making changes.</string>
+    <string name="sb_icon_scale">Icon scale</string>
+    <string name="sb_left_gap">Left spacing</string>
+    <string name="sb_right_gap">Right spacing</string>
+    <string name="sb_vertical_offset">Vertical offset</string>
+    <string name="sb_unit_dp">dp</string>
+    <string name="sb_unit_scale">×</string>
 </resources>

@@ -60,15 +60,14 @@ internal object StatusBarMembers {
         else constructor.newInstance(flow, null)
     }
 
-    // DORMANT: helper required when restoring DualSimSignalHook and StatusBarPolicy.
-    // The host Pair comes from its own Kotlin class loader; do not cast to the module's Pair.
-    // fun mobileVisibility(value: Any?): StatusBarPolicy.Visibility? {
-    //     if (value is Boolean) return StatusBarPolicy.Visibility(value, value)
-    //     if (value?.javaClass?.name != "kotlin.Pair") return null
-    //     val root = Reflect.callMethod(value, "getFirst") as? Boolean ?: return null
-    //     val signal = Reflect.callMethod(value, "getSecond") as? Boolean ?: return null
-    //     return StatusBarPolicy.Visibility(root, root && signal)
-    // }
+    /** The host Pair comes from its own Kotlin loader; do not cast it to the module's Pair. */
+    fun mobileVisibility(value: Any?): StatusBarPolicy.Visibility? {
+        if (value is Boolean) return StatusBarPolicy.Visibility(value, value)
+        if (value?.javaClass?.name != "kotlin.Pair") return null
+        val root = Reflect.callMethod(value, "getFirst") as? Boolean ?: return null
+        val signal = Reflect.callMethod(value, "getSecond") as? Boolean ?: return null
+        return StatusBarPolicy.Visibility(root, root && signal)
+    }
 }
 
 internal class StatusBarGuard(private val label: String) {

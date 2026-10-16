@@ -20,7 +20,8 @@ class NetworkIconsActivity : BaseSubPageActivity() {
         val specs = statusBarSpecs(featureSpecs())
         StatusBarSections(listOf(
             HookSection(R.string.sb_network_section, specs = specs.take(1)),
-            HookSection(R.string.sb_mobile_type_section, specs = specs.drop(1)),
+            HookSection(R.string.sb_mobile_type_section, specs = specs.slice(1..1)),
+            HookSection(R.string.sb_mobile_dual_section, specs = specs.drop(2)),
         ), contentPadding)
     }
 }
